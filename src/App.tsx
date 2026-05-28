@@ -98,51 +98,91 @@ ${text.substring(0, 30000)}
       setStep(2);
       setIsGenerating(true);
 
-      const prompt = `Bạn là một giáo viên xuất sắc. Dựa vào ma trận đề thi sau, hãy tạo ra MỘT ĐỀ THI TƯƠNG TỰ (ĐỀ SONG SONG) hoàn toàn mới.
+      // Build batch prompt for a subset of topics
+      const buildBatchPrompt = (topicSlice: Array<{name: string; count: number}>, batchIdx: number, totalBatches: number) => {
+          const totalInBatch = topicSlice.reduce((s, t) => s + t.count, 0);
+          return `Bạn là giáo viên xuất sắc. Hãy tạo ra ĐÚNG ${totalInBatch} câu hỏi trắc nghiệm MỚI cho môn ${matrix!.subject}.
 Yêu cầu:
-- Tuyệt đối bám sát cấu trúc, số lượng câu, chuyên đề và độ khó của ma trận này.
-- Câu hỏi mới không được giống câu gốc (nếu bạn biết đề gốc), thay đổi số liệu, nhân vật, bối cảnh.
-- Cung cấp 4 đáp án (A,B,C,D) cho các câu trắc nghiệm, chỉ định đáp án đúng và giải thích chi tiết tại sao đúng.
-- Trả về CHỈ JSON theo định dạng sau (đảm bảo escape JSON đúng):
-{
-  "questions": [
-    {
-      "originalId": "1",
-      "type": "multiple_choice",
-      "topic": "Tên chuyên đề",
-      "difficulty": "Mức độ",
-      "content": "Nội dung câu hỏi (có thể hỗ trợ markdown, latex $...$)",
-      "options": [{"id": "A", "content": "Lựa chọn 1"}, {"id": "B", "content": "..."}],
-      "correctAnswer": "A",
-      "explanation": "Giải thích chi tiết các bước"
-    }
-  ]
-}
+- Mỗi câu đúng chủ đề, số lượng trong bảng bên dưới.
+- 4 đáp án A/B/C/D, chỉ rõ đáp án đúng, giải thích ngắn gọn.
+- Trả về CHỈ JSON hợp lệ (batch ${batchIdx + 1}/${totalBatches}), KHÔNG có text ngoài JSON:
+{"questions":[{"originalId":"1","type":"multiple_choice","topic":"...","difficulty":"Nhận biết","content":"...","options":[{"id":"A","content":"..."},{"id":"B","content":"..."},{"id":"C","content":"..."},{"id":"D","content":"..."}],"correctAnswer":"A","explanation":"..."}]}
 
-MA TRẬN ĐỀ THI:
-${JSON.stringify(matrix)}
-`;
+CHỦ ĐỀ CẦN TẠO:
+${JSON.stringify(topicSlice)}`;
+      };
+
       try {
-          // Force high output token limits if available, setting default in api handles this
-          const resp = await callGemini({ prompt, model: getStoredModel() }, getStoredApiKey());
-          
-          if (resp && resp.questions) {
-              const newExam: Exam = {
-                  id: uuidv4(),
-                  title: `Đề thi song song: ${matrix.subject} - ${new Date().toLocaleDateString('vi-VN')}`,
-                  createdAt: Date.now(),
-                  matrix: matrix,
-                  questions: resp.questions.map((q: any) => ({...q, id: uuidv4()}))
-              };
-              setCurrentExam(newExam);
-              storeExam(newExam);
-              refreshHistory();
-          } else {
-              throw new Error("Dữ liệu trả về bị thiếu 'questions'");
+          const BATCH_SIZE = 25; // questions per API call to stay well within token/time limits
+          const topics: Array<{name: string; count: number}> = matrix.topics || [];
+
+          // Split topics into batches where each batch has at most BATCH_SIZE questions
+          const batches: Array<Array<{name: string; count: number}>> = [];
+          let currentBatch: Array<{name: string; count: number}> = [];
+          let currentBatchTotal = 0;
+
+          for (const topic of topics) {
+              let remaining = topic.count;
+              while (remaining > 0) {
+                  const canFit = BATCH_SIZE - currentBatchTotal;
+                  if (canFit <= 0) {
+                      batches.push(currentBatch);
+                      currentBatch = [];
+                      currentBatchTotal = 0;
+                      continue;
+                  }
+                  const take = Math.min(remaining, canFit);
+                  currentBatch.push({ name: topic.name, count: take });
+                  currentBatchTotal += take;
+                  remaining -= take;
+              }
+              if (currentBatchTotal >= BATCH_SIZE) {
+                  batches.push(currentBatch);
+                  currentBatch = [];
+                  currentBatchTotal = 0;
+              }
           }
+          if (currentBatch.length > 0) batches.push(currentBatch);
+
+          // Fallback: if no topics parsed, use a single simple prompt
+          if (batches.length === 0) {
+              const fallbackCount = Math.min(matrix.totalQuestions || 20, BATCH_SIZE);
+              batches.push([{ name: matrix.subject || 'Tổng hợp', count: fallbackCount }]);
+          }
+
+          const allQuestions: any[] = [];
+
+          for (let i = 0; i < batches.length; i++) {
+              const prompt = buildBatchPrompt(batches[i], i, batches.length);
+              const resp = await callGemini({ prompt, model: getStoredModel() }, getStoredApiKey());
+
+              if (resp && Array.isArray(resp.questions)) {
+                  allQuestions.push(...resp.questions);
+              } else if (Array.isArray(resp)) {
+                  allQuestions.push(...resp);
+              } else {
+                  const preview = JSON.stringify(resp)?.substring(0, 300) ?? '(null)';
+                  throw new Error(`Batch ${i + 1}/${batches.length} trả về sai định dạng.\nNhận được: ${preview}`);
+              }
+          }
+
+          if (allQuestions.length === 0) {
+              throw new Error('AI không tạo được câu hỏi nào. Vui lòng thử lại.');
+          }
+
+          const newExam: Exam = {
+              id: uuidv4(),
+              title: `Đề thi song song: ${matrix.subject} - ${new Date().toLocaleDateString('vi-VN')}`,
+              createdAt: Date.now(),
+              matrix: matrix,
+              questions: allQuestions.map((q: any) => ({...q, id: uuidv4()}))
+          };
+          setCurrentExam(newExam);
+          storeExam(newExam);
+          refreshHistory();
       } catch (e: any) {
           Swal.fire('Lỗi tạo đề', e.message, 'error');
-          setStep(1); // Go back to matrix
+          setStep(1);
       } finally {
           setIsGenerating(false);
       }
