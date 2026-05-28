@@ -12,24 +12,36 @@ export function Dropzone({ onTextExtracted }: { onTextExtracted: (text: string) 
     const [textInput, setTextInput] = useState('');
 
     const processFile = async (file: File) => {
-        if (!file.type.includes('pdf')) {
-            Swal.fire('Lỗi định dạng', 'Vui lòng chọn file PDF', 'error');
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
+
+        if (!isPdf && !isTxt) {
+            Swal.fire('Lỗi định dạng', 'Chỉ hỗ trợ file PDF hoặc TXT. Vui lòng chọn đúng định dạng.', 'error');
             return;
         }
         if (file.size > 15 * 1024 * 1024) {
-            Swal.fire('Lỗi dung lượng', 'File PDF quá lớn (>15MB). Vui lòng chia nhỏ file.', 'error');
+            Swal.fire('Lỗi dung lượng', `File ${isPdf ? 'PDF' : 'TXT'} quá lớn (>15MB). Vui lòng chia nhỏ file.`, 'error');
             return;
         }
 
         setIsLoading(true);
         try {
-            const text = await extractTextFromPDF(file);
-            if (text.length < 50) {
-                throw new Error("Không thể trích xuất văn bản hợp lệ từ file PDF này. Có thể đây là file ảnh scan.");
+            let text = '';
+            if (isPdf) {
+                text = await extractTextFromPDF(file);
+                if (text.length < 50) {
+                    throw new Error("Không thể trích xuất văn bản từ file PDF này. Có thể đây là file ảnh scan — hãy dùng tab 'Nhập văn bản' để dán thủ công.");
+                }
+            } else {
+                // TXT file: read as plain text
+                text = await file.text();
+                if (text.trim().length < 50) {
+                    throw new Error("File TXT quá ngắn hoặc rỗng. Vui lòng kiểm tra lại nội dung.");
+                }
             }
-            onTextExtracted(text);
+            onTextExtracted(text.trim());
         } catch (e: any) {
-            Swal.fire('Lỗi đọc file', e.message || 'Không thể trích xuất PDF', 'error');
+            Swal.fire('Lỗi đọc file', e.message || 'Không thể đọc file', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -83,7 +95,7 @@ export function Dropzone({ onTextExtracted }: { onTextExtracted: (text: string) 
                         }`}
                     >
                         <FileText size={16} />
-                        Tải file PDF
+                        Tải file PDF / TXT
                     </button>
                     <button
                         onClick={() => setTab('text')}
@@ -118,16 +130,16 @@ export function Dropzone({ onTextExtracted }: { onTextExtracted: (text: string) 
                                     <Upload size={32} />
                                 </div>
                                 <h2 className="text-[22px] font-bold text-slate-900 mb-2">
-                                    {isHovering ? 'Thả file vào đây!' : 'Tải Đề thi PDF lên'}
+                                    {isHovering ? 'Thả file vào đây!' : 'Tải Đề thi lên'}
                                 </h2>
                                 <p className="text-sm text-slate-600 mb-8 max-w-md mx-auto leading-relaxed">
-                                    Kéo thả file PDF vào khu vực này hoặc chọn file từ thiết bị để AI phân tích ma trận bài thi tự động.
+                                    Kéo thả file <strong>PDF</strong> hoặc <strong>TXT</strong> vào đây, hoặc chọn file từ thiết bị để AI phân tích ma trận bài thi.
                                 </p>
                                 <label className="px-[18px] py-[10px] rounded-lg font-semibold text-sm cursor-pointer border-none transition-all duration-200 bg-gradient-to-br from-indigo-600 to-blue-500 text-white shadow hover:opacity-90 inline-flex">
                                     Chọn file từ thiết bị
-                                    <input type="file" className="hidden" accept=".pdf" onChange={handleChange} />
+                                    <input type="file" className="hidden" accept=".pdf,.txt,application/pdf,text/plain" onChange={handleChange} />
                                 </label>
-                                <p className="text-xs text-slate-400 mt-4">Hỗ trợ PDF văn bản — Tối đa 15MB</p>
+                                <p className="text-xs text-slate-400 mt-4">Hỗ trợ PDF văn bản &amp; TXT — Tối đa 15MB</p>
                             </div>
                         )}
                     </div>
