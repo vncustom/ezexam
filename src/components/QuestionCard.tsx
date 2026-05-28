@@ -52,8 +52,36 @@ export function QuestionCard({ question, isAnswerSide, onRegenerate, onEdit }: Q
                     )}
                 </div>
                 <div className="text-[13px] text-slate-700">
-                    <div className="mb-2 font-semibold">
-                        Đáp án đúng: <span className="text-emerald-600">{question.correctAnswer || '-'}</span>
+                    <div className="mb-2 font-semibold flex items-center gap-2 flex-wrap">
+                        <span>Đáp án đúng:</span>
+                        {(() => {
+                            if (!question.correctAnswer) return <span className="text-slate-400">Chưa có</span>;
+                            if (question.type === 'true_false') {
+                                const parts = question.correctAnswer.split(',').map(p => p.trim());
+                                return (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {parts.map((p, idx) => {
+                                            const isDung = p.toLowerCase().includes('đúng') || p.toLowerCase().includes('true') || p.toLowerCase().includes('t');
+                                            return (
+                                                <span 
+                                                    key={idx} 
+                                                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                        isDung ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                                    }`}
+                                                >
+                                                    {p}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            }
+                            return (
+                                <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                    {question.correctAnswer}
+                                </span>
+                            );
+                        })()}
                     </div>
                     {isEditing ? (
                         <div>
@@ -139,17 +167,71 @@ export function QuestionCard({ question, isAnswerSide, onRegenerate, onEdit }: Q
             </div>
 
             {/* Options */}
-            {!isEditing && question.type === 'multiple_choice' && question.options && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-[8px] text-[14px] mt-3">
-                    {question.options.map(opt => (
-                        <div key={opt.id} className="flex items-start gap-2 text-slate-800">
-                            <span className="font-semibold w-5 shrink-0">{opt.id}.</span>
-                            <div className="pt-0.5">
-                                <Markdown>{opt.content}</Markdown>
+            {!isEditing && (
+                <>
+                    {/* Trắc nghiệm chọn 1 đáp án */}
+                    {question.type === 'multiple_choice' && question.options && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-[8px] text-[14px] mt-3">
+                            {question.options.map(opt => (
+                                <div key={opt.id} className="flex items-start gap-2 text-slate-800">
+                                    <span className="font-semibold w-5 shrink-0">{opt.id}.</span>
+                                    <div className="pt-0.5">
+                                        <Markdown>{opt.content}</Markdown>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Trắc nghiệm Đúng / Sai */}
+                    {question.type === 'true_false' && question.options && (
+                        <div className="mt-3 border border-slate-200 rounded-lg overflow-hidden max-w-xl shadow-sm bg-white">
+                            <table className="w-full text-[13px] text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 text-slate-700 border-b border-slate-200">
+                                        <th className="p-2 font-bold pl-4">Mệnh đề</th>
+                                        <th className="p-2 font-bold w-16 text-center">Đúng</th>
+                                        <th className="p-2 font-bold w-16 text-center">Sai</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {question.options.map(opt => (
+                                        <tr key={opt.id} className="border-b border-slate-100 last:border-none hover:bg-slate-50/50">
+                                            <td className="p-2 pl-4 text-slate-800 font-serif">
+                                                <Markdown>{opt.content}</Markdown>
+                                            </td>
+                                            <td className="p-2 text-center">
+                                                <span className="w-4.5 h-4.5 inline-flex items-center justify-center border border-slate-300 rounded-sm text-[10px] text-slate-400 select-none">Đ</span>
+                                            </td>
+                                            <td className="p-2 text-center">
+                                                <span className="w-4.5 h-4.5 inline-flex items-center justify-center border border-slate-300 rounded-sm text-[10px] text-slate-400 select-none">S</span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* Trắc nghiệm trả lời ngắn */}
+                    {question.type === 'short_answer' && (
+                        <div className="mt-3 flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đáp án tự điền:</span>
+                            <div className="w-40 h-8 border border-slate-300 rounded-md bg-slate-50/50 flex items-center px-3 text-slate-400 text-xs italic">
+                                Học sinh điền kết quả...
                             </div>
                         </div>
-                    ))}
-                </div>
+                    )}
+
+                    {/* Tự luận */}
+                    {question.type === 'essay' && (
+                        <div className="mt-3">
+                            <div className="w-full h-24 border border-dashed border-slate-300 rounded-md bg-slate-50/30 flex items-center justify-center text-slate-400 text-xs italic">
+                                Học sinh trả lời tự luận ở đây...
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

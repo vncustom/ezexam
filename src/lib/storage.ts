@@ -65,6 +65,30 @@ export const ensureDemoData = () => {
                     { level: 'Thông hiểu', count: 2 },
                     { level: 'Vận dụng', count: 1 },
                     { level: 'Vận dụng cao', count: 0 }
+                ],
+                sections: [
+                    {
+                        id: 'sec-1',
+                        name: 'PHẦN I: Trắc nghiệm Kiến thức nền tảng',
+                        instruction: 'Chọn phương án trả lời đúng cho mỗi câu hỏi sau.',
+                        questionType: 'multiple_choice',
+                        questions: [
+                            { originalId: '1', topic: 'Phát âm', difficulty: 'Nhận biết', stemDescription: 'Phát âm đuôi "s/es" của danh từ' },
+                            { originalId: '2', topic: 'Ngữ pháp', difficulty: 'Thông hiểu', stemDescription: 'Sự phối hợp thì giữa Quá khứ hoàn thành và Quá khứ đơn' },
+                            { originalId: '3', topic: 'Từ vựng', difficulty: 'Nhận biết', stemDescription: 'Tìm từ đồng nghĩa (remarkable)' },
+                            { originalId: '4', topic: 'Ngữ pháp', difficulty: 'Thông hiểu', stemDescription: 'Câu điều kiện loại 3' }
+                        ]
+                    },
+                    {
+                        id: 'sec-2',
+                        name: 'PHẦN II: Đọc hiểu văn bản',
+                        instruction: 'Đọc đoạn văn ngắn sau và trả lời câu hỏi.',
+                        passage: 'Despite the heavy rain, hundreds of volunteers turned out to clean up the park. Their dedication was truly inspiring.',
+                        questionType: 'multiple_choice',
+                        questions: [
+                            { originalId: '5', topic: 'Đọc hiểu', difficulty: 'Vận dụng', stemDescription: 'Tìm nghĩa của từ dựa vào ngữ cảnh' }
+                        ]
+                    }
                 ]
             },
             questions: [
@@ -72,6 +96,7 @@ export const ensureDemoData = () => {
                     id: 'q1',
                     originalId: '1',
                     type: 'multiple_choice',
+                    sectionId: 'sec-1',
                     topic: 'Phát âm',
                     difficulty: 'Nhận biết',
                     content: 'Mark the letter A, B, C, or D to indicate the word whose **underlined part** differs from the other three in pronunciation.',
@@ -88,6 +113,7 @@ export const ensureDemoData = () => {
                     id: 'q2',
                     originalId: '2',
                     type: 'multiple_choice',
+                    sectionId: 'sec-1',
                     topic: 'Ngữ pháp',
                     difficulty: 'Thông hiểu',
                     content: 'By the time she arrived at the station, the train _______ already _______.',
@@ -104,6 +130,7 @@ export const ensureDemoData = () => {
                     id: 'q3',
                     originalId: '3',
                     type: 'multiple_choice',
+                    sectionId: 'sec-1',
                     topic: 'Từ vựng',
                     difficulty: 'Nhận biết',
                     content: 'Choose the word or phrase that is **CLOSEST in meaning** to the underlined word: "The scientist made a **remarkable** discovery last year."',
@@ -120,6 +147,7 @@ export const ensureDemoData = () => {
                     id: 'q4',
                     originalId: '4',
                     type: 'multiple_choice',
+                    sectionId: 'sec-1',
                     topic: 'Ngữ pháp',
                     difficulty: 'Thông hiểu',
                     content: 'If I _______ harder, I would have passed the exam.',
@@ -136,6 +164,8 @@ export const ensureDemoData = () => {
                     id: 'q5',
                     originalId: '5',
                     type: 'multiple_choice',
+                    sectionId: 'sec-2',
+                    passage: 'Despite the heavy rain, hundreds of volunteers turned out to clean up the park. Their dedication was truly inspiring.',
                     topic: 'Đọc hiểu',
                     difficulty: 'Vận dụng',
                     content: 'Read the following passage and answer the question:\n\n*"Despite the heavy rain, hundreds of volunteers turned out to clean up the park. Their dedication was truly inspiring."*\n\nWhat does the word **"dedication"** in the passage most likely mean?',

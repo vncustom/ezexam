@@ -130,23 +130,21 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
         makeEmptyPara(80),
     ];
 
-    // Questions
-    for (const q of questions) {
-        // Question stem
+    // Helper to write a question block
+    const writeQuestionToChildren = (q: any, childrenArray: any[]) => {
         const qRuns: TextRun[] = [
             new TextRun({ text: `Câu ${q.originalId}: `, bold: true, size: 24, font: 'Times New Roman' }),
             ...parseMarkdownRuns(stripMarkdown(q.content), 24),
         ];
-        examChildren.push(
+        childrenArray.push(
             new Paragraph({
                 spacing: { before: 120, after: 80 },
                 children: qRuns,
             })
         );
 
-        // Options in 2-column table for MC
-        if (q.type === 'multiple_choice' && q.options && q.options.length === 4) {
-            const colW = Math.floor(USABLE_WIDTH / 4);
+        if (q.type === 'multiple_choice' && q.options && q.options.length > 0) {
+            const colW = Math.floor(USABLE_WIDTH / q.options.length);
             const makeOptCell = (opt: { id: string; content: string }) =>
                 new TableCell({
                     borders: CELL_BORDERS_NONE,
@@ -160,20 +158,104 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
                     })]
                 });
 
-            examChildren.push(
+            childrenArray.push(
                 new Table({
-                    columnWidths: [colW, colW, colW, colW],
+                    columnWidths: Array(q.options.length).fill(colW),
                     margins: { top: 0, bottom: 0, left: 360, right: 0 },
                     rows: [
                         new TableRow({
-                            children: q.options.map(opt => makeOptCell(opt))
+                            children: q.options.map((opt: any) => makeOptCell(opt))
                         })
+                    ]
+                })
+            );
+        } else if (q.type === 'true_false' && q.options && q.options.length > 0) {
+            for (const opt of q.options) {
+                childrenArray.push(
+                    new Paragraph({
+                        spacing: { before: 40, after: 40 },
+                        indent: { left: 360 },
+                        children: [
+                            new TextRun({ text: `${opt.id.toLowerCase()}) `, bold: true, size: 24, font: 'Times New Roman' }),
+                            ...parseMarkdownRuns(stripMarkdown(opt.content), 24),
+                            new TextRun({ text: '  .................................................  [ Đúng / Sai ]', italics: true, size: 22, font: 'Times New Roman', color: '888888' })
+                        ]
+                    })
+                );
+            }
+        } else if (q.type === 'short_answer') {
+            childrenArray.push(
+                new Paragraph({
+                    spacing: { before: 60, after: 60 },
+                    indent: { left: 360 },
+                    children: [
+                        new TextRun({ text: 'Đáp số: ........................................................................', italics: true, size: 24, font: 'Times New Roman', color: '666666' })
+                    ]
+                })
+            );
+        } else if (q.type === 'essay') {
+            childrenArray.push(
+                new Paragraph({
+                    spacing: { before: 60, after: 80 },
+                    indent: { left: 360 },
+                    children: [
+                        new TextRun({ text: 'Bài làm:\n................................................................................................................................................\n................................................................................................................................................', italics: true, size: 24, font: 'Times New Roman', color: '888888' })
                     ]
                 })
             );
         }
 
-        examChildren.push(makeEmptyPara(40));
+        childrenArray.push(makeEmptyPara(40));
+    };
+
+    // Render questions by section if available
+    const sections = matrix.sections;
+    if (sections && sections.length > 0) {
+        for (const sec of sections) {
+            const secQuestions = questions.filter(q => q.sectionId === sec.id);
+            if (secQuestions.length === 0) continue;
+
+            examChildren.push(
+                new Paragraph({
+                    spacing: { before: 180, after: 80 },
+                    children: [
+                        new TextRun({ text: sec.name.toUpperCase(), bold: true, size: 24, font: 'Times New Roman' })
+                    ]
+                }),
+                new Paragraph({
+                    spacing: { after: 120 },
+                    children: [
+                        new TextRun({ text: sec.instruction, italics: true, size: 22, font: 'Times New Roman' })
+                    ]
+                })
+            );
+
+            if (sec.passage) {
+                examChildren.push(
+                    new Paragraph({
+                        spacing: { before: 80, after: 80 },
+                        indent: { left: 240, right: 240 },
+                        border: {
+                            left: { style: BorderStyle.SINGLE, size: 12, color: '888888' }
+                        },
+                        children: [
+                            new TextRun({ text: 'Đọc hiểu ngữ liệu sau đây:\n', bold: true, size: 22, font: 'Times New Roman' }),
+                            new TextRun({ text: sec.passage, size: 22, font: 'Times New Roman', italics: true })
+                        ]
+                    }),
+                    makeEmptyPara(40)
+                );
+            }
+
+            for (const q of secQuestions) {
+                writeQuestionToChildren(q, examChildren);
+            }
+        }
+    } else {
+        // Fallback: flat list
+        for (const q of questions) {
+            writeQuestionToChildren(q, examChildren);
+        }
     }
 
     // ───────────────────────────────────────────────
@@ -196,7 +278,6 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
     // Quick answer table
     const answersPerRow = 5;
     const answerRows: TableRow[] = [];
-    // Header row
     const colW2 = Math.floor(USABLE_WIDTH / (answersPerRow * 2));
     const headerCells: TableCell[] = [];
     for (let i = 0; i < answersPerRow; i++) {
@@ -228,6 +309,13 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
         const cells: TableCell[] = [];
         for (let i = 0; i < answersPerRow; i++) {
             const q = chunk[i];
+            
+            let displayAnswer = q?.correctAnswer || '';
+            if (q?.type === 'true_false' && displayAnswer) {
+                // Shorten "Đúng" to "Đ" and "Sai" to "S" for table compactness
+                displayAnswer = displayAnswer.replace(/Đúng/g, 'Đ').replace(/Sai/g, 'S');
+            }
+
             cells.push(
                 new TableCell({
                     borders: CELL_BORDERS,
@@ -237,11 +325,10 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
                 new TableCell({
                     borders: CELL_BORDERS,
                     width: { size: colW2, type: WidthType.DXA },
-                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q?.correctAnswer || '', bold: true, size: 22, font: 'Times New Roman', color: '1D4ED8' })] })]
+                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: displayAnswer, bold: true, size: 22, font: 'Times New Roman', color: '1D4ED8' })] })]
                 }),
             );
         }
-        // Pad remaining cells
         for (let i = chunk.length; i < answersPerRow; i++) {
             cells.push(
                 new TableCell({ borders: CELL_BORDERS, width: { size: colW2, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun('')] })] }),
@@ -251,7 +338,6 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
         answerRows.push(new TableRow({ children: cells }));
     }
 
-    const totalColW = colW2 * 2;
     answerChildren.push(
         new Table({
             columnWidths: Array(answersPerRow * 2).fill(colW2),
@@ -280,7 +366,6 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
             })
         );
 
-        // Split explanation by newlines into separate paragraphs
         const explanationLines = stripMarkdown(q.explanation).split('\n').filter(l => l.trim());
         for (const line of explanationLines) {
             answerChildren.push(

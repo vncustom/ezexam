@@ -26,6 +26,58 @@ export function Workspace({
     const [isExportingDocx, setIsExportingDocx] = useState(false);
     const examRef = useRef<HTMLDivElement>(null);
 
+    const renderQuestionsList = (isAnswer: boolean) => {
+        const sections = exam.matrix.sections;
+        if (sections && sections.length > 0) {
+            return sections.map((sec) => {
+                const secQuestions = exam.questions.filter(q => q.sectionId === sec.id);
+                if (secQuestions.length === 0) return null;
+
+                return (
+                    <div key={sec.id} className="border-b border-slate-100 pb-4">
+                        {/* Section Header */}
+                        <div className="p-[20px_40px_10px] bg-slate-50/50 border-b border-slate-200/50">
+                            <h4 className="font-bold text-[14px] uppercase tracking-wide text-indigo-900">{sec.name}</h4>
+                            <p className="text-[12px] text-slate-600 mt-1 italic">{sec.instruction}</p>
+                        </div>
+
+                        {/* Passage - show only once per section, on the exam side */}
+                        {!isAnswer && sec.passage && (
+                            <div className="m-[20px_40px_10px] p-5 bg-indigo-50/30 border border-indigo-100/60 rounded-xl leading-relaxed text-[14.5px] text-slate-800 font-serif">
+                                <div className="font-semibold text-xs text-indigo-700 uppercase tracking-wider mb-2">Đọc hiểu ngữ liệu sau:</div>
+                                <p className="whitespace-pre-wrap">{sec.passage}</p>
+                            </div>
+                        )}
+
+                        {/* Section Questions */}
+                        <div className="flex flex-col">
+                            {secQuestions.map(q => (
+                                <QuestionCard 
+                                    key={isAnswer ? `sol-${q.id}` : q.id} 
+                                    question={q} 
+                                    isAnswerSide={isAnswer} 
+                                    onRegenerate={onRegenerateQuestion} 
+                                    onEdit={onEditQuestion} 
+                                />
+                            ))}
+                        </div>
+                    </div>
+                );
+            });
+        }
+
+        // Fallback: flat list
+        return exam.questions.map(q => (
+            <QuestionCard 
+                key={isAnswer ? `sol-${q.id}` : q.id} 
+                question={q} 
+                isAnswerSide={isAnswer} 
+                onRegenerate={onRegenerateQuestion} 
+                onEdit={onEditQuestion} 
+            />
+        ));
+    };
+
     const handleExportPDF = async () => {
         if (!examRef.current || !exam) return;
         const opt = {
@@ -77,9 +129,7 @@ export function Workspace({
                 </div>
 
                 <div className="flex-1 overflow-y-auto" ref={examRef}>
-                    {exam.questions.map(q => (
-                        <QuestionCard key={q.id} question={q} isAnswerSide={false} onRegenerate={onRegenerateQuestion} onEdit={onEditQuestion} />
-                    ))}
+                    {renderQuestionsList(false)}
                 </div>
 
                 {/* Footer Actions */}
@@ -125,9 +175,7 @@ export function Workspace({
                     <h3 className="font-bold text-base mb-4 text-slate-900 pb-2 border-b border-slate-100 shrink-0">Đáp án & Giải thích</h3>
 
                     <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4">
-                        {exam.questions.map(q => (
-                            <QuestionCard key={`sol-${q.id}`} question={q} isAnswerSide={true} />
-                        ))}
+                        {renderQuestionsList(true)}
                     </div>
                 </div>
 
