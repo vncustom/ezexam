@@ -171,7 +171,7 @@ export function QuestionCard({ question, isAnswerSide, onRegenerate, onEdit }: Q
                 <>
                     {/* Trắc nghiệm chọn 1 đáp án */}
                     {question.type === 'multiple_choice' && question.options && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-[8px] text-[14px] mt-3">
+                        <div className="flex flex-col gap-1.5 text-[14px] mt-3 pl-4">
                             {question.options.map(opt => (
                                 <div key={opt.id} className="flex items-start gap-2 text-slate-800">
                                     <span className="font-semibold w-5 shrink-0">{opt.id}.</span>

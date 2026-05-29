@@ -145,31 +145,18 @@ export async function exportExamToDocx(exam: Exam): Promise<void> {
         );
 
         if (q.type === 'multiple_choice' && q.options && q.options.length > 0) {
-            const colW = Math.floor(USABLE_WIDTH / q.options.length);
-            const makeOptCell = (opt: { id: string; content: string }) =>
-                new TableCell({
-                    borders: CELL_BORDERS_NONE,
-                    width: { size: colW, type: WidthType.DXA },
-                    children: [new Paragraph({
-                        spacing: { after: 40 },
+            for (const opt of q.options) {
+                childrenArray.push(
+                    new Paragraph({
+                        spacing: { before: 40, after: 40 },
+                        indent: { left: 360 },
                         children: [
                             new TextRun({ text: `${opt.id}. `, bold: true, size: 24, font: 'Times New Roman' }),
                             ...parseMarkdownRuns(stripMarkdown(opt.content), 24),
                         ]
-                    })]
-                });
-
-            childrenArray.push(
-                new Table({
-                    columnWidths: Array(q.options.length).fill(colW),
-                    margins: { top: 0, bottom: 0, left: 360, right: 0 },
-                    rows: [
-                        new TableRow({
-                            children: q.options.map((opt: any) => makeOptCell(opt))
-                        })
-                    ]
-                })
-            );
+                    })
+                );
+            }
         } else if (q.type === 'true_false' && q.options && q.options.length > 0) {
             for (const opt of q.options) {
                 childrenArray.push(

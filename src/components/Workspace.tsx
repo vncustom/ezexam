@@ -83,7 +83,7 @@ export function Workspace({
     };
 
     const handleExportPDF = async () => {
-        if (!examRef.current || !exam) return;
+        if (!exam) return;
         
         Swal.fire({
             title: 'Đang khởi tạo PDF...',
@@ -92,62 +92,145 @@ export function Workspace({
             didOpen: () => Swal.showLoading()
         });
 
+        // Tạm thời vô hiệu hóa tất cả stylesheet trên trang để tránh html2canvas quét phải thuộc tính 'oklch'
+        const disabledSheets: HTMLStyleElement[] = [];
+        const links = document.querySelectorAll('style, link[rel="stylesheet"]');
+        links.forEach(sheet => {
+            const htmlSheet = sheet as HTMLStyleElement | HTMLLinkElement;
+            if (!htmlSheet.disabled) {
+                try {
+                    htmlSheet.disabled = true;
+                    disabledSheets.push(htmlSheet as any);
+                } catch (e) {
+                    console.warn('Cannot disable stylesheet:', e);
+                }
+            }
+        });
+
         try {
-            // Tạo DOM clone tạm thời đặt ẩn ngoài màn hình để tránh scroll và lỗi layout
+            // Tạo DOM chứa đề thi sạch hoàn toàn (Không sử dụng CSS Tailwind, không có oklch)
             const printContainer = document.createElement('div');
             printContainer.style.position = 'absolute';
             printContainer.style.left = '-9999px';
             printContainer.style.top = '-9999px';
-            printContainer.style.width = '790px'; // Chiều rộng chuẩn A4
-            printContainer.style.background = 'white';
-            printContainer.style.color = 'black';
+            printContainer.style.width = '790px'; // Chiều rộng trang A4
+            printContainer.style.background = '#ffffff';
+            printContainer.style.color = '#000000';
             printContainer.style.padding = '40px';
-            printContainer.style.fontFamily = 'Times New Roman, serif';
-
-            // Tạo tiêu đề đề thi chuẩn học đường Việt Nam
-            const schoolHeader = document.createElement('div');
-            schoolHeader.innerHTML = `
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; line-height: 1.5;">
-                    <tr>
-                        <td style="width: 55%; text-align: center; vertical-align: top;">
-                            SỞ GD&ĐT ________________<br/>
-                            <strong>TRƯỜNG THPT ________________</strong>
-                        </td>
-                        <td style="width: 45%; text-align: center; vertical-align: top;">
-                            <strong>ĐỀ KIỂM TRA ĐỊNH KÌ</strong><br/>
-                            Môn: <strong>${exam.matrix.subject.toUpperCase()}</strong><br/>
-                            <em>Thời gian làm bài: ${exam.matrix.durationMinutes} phút</em>
-                        </td>
-                    </tr>
-                </table>
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <h2 style="font-size: 16px; margin: 0; text-transform: uppercase; font-weight: bold;">ĐỀ THI SONG SONG</h2>
-                    <span style="font-size: 13px; font-style: italic;">(${exam.title})</span>
+            printContainer.style.fontFamily = '"Times New Roman", Times, serif';
+            printContainer.style.fontSize = '14.5px';
+            printContainer.style.lineHeight = '1.6';
+            
+            // 1. Render Header đề thi
+            let htmlContent = `
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                        <tr>
+                            <td style="width: 55%; text-align: center; vertical-align: top; font-size: 13px;">
+                                SỞ GD&ĐT ________________<br/>
+                                <strong style="text-transform: uppercase;">TRƯỜNG THPT ________________</strong>
+                            </td>
+                            <td style="width: 45%; text-align: center; vertical-align: top; font-size: 13px;">
+                                <strong>ĐỀ KIỂM TRA ĐỊNH KÌ</strong><br/>
+                                Môn: <strong style="text-transform: uppercase;">${exam.matrix.subject}</strong><br/>
+                                <em>Thời gian làm bài: ${exam.matrix.durationMinutes} phút</em>
+                            </td>
+                        </tr>
+                    </table>
+                    <h2 style="font-size: 17px; margin: 15px 0 5px; font-weight: bold; text-transform: uppercase;">ĐỀ THI SONG SONG</h2>
+                    <div style="font-style: italic; font-size: 13px; margin-bottom: 15px;">(${exam.title})</div>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; text-align: left; font-size: 13px;">
+                        <tr>
+                            <td style="width: 65%;">Họ và tên học sinh: ........................................................................</td>
+                            <td style="width: 35%;">Số báo danh: .......................................</td>
+                        </tr>
+                    </table>
+                    <hr style="border: none; border-top: 1px dashed #000; margin-bottom: 20px;" />
                 </div>
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 13px;">
-                    <tr>
-                        <td style="border: none; padding: 4px 0; width: 65%;">Họ và tên học sinh: ........................................................................</td>
-                        <td style="border: none; padding: 4px 0; width: 35%;">Số báo danh: .......................................</td>
-                    </tr>
-                </table>
-                <hr style="border: none; border-top: 1px dashed #666; margin-bottom: 25px;" />
             `;
-            printContainer.appendChild(schoolHeader);
 
-            // Clone nội dung câu hỏi
-            const questionsClone = examRef.current.cloneNode(true) as HTMLElement;
-            
-            // Xóa bỏ các kiểu scroll/chiều cao giới hạn ở clone để bung toàn bộ chiều cao tự nhiên
-            questionsClone.style.height = 'auto';
-            questionsClone.style.overflow = 'visible';
-            questionsClone.style.padding = '0';
-            questionsClone.style.margin = '0';
-            
-            // Ẩn tất cả các nút đổi câu, sửa câu khi xuất PDF
-            const actionButtons = questionsClone.querySelectorAll('.group-hover\\:opacity-100, .absolute');
-            actionButtons.forEach(btn => (btn as HTMLElement).style.setProperty('display', 'none', 'important'));
+            // Helper render từng câu hỏi
+            const renderQ = (q: any) => {
+                let qHtml = `
+                    <div style="margin-bottom: 18px; page-break-inside: avoid;">
+                        <span style="font-weight: bold;">Câu ${q.originalId}:</span> ${q.content}
+                `;
 
-            printContainer.appendChild(questionsClone);
+                if (q.type === 'multiple_choice' && q.options) {
+                    qHtml += `<div style="margin-top: 5px; margin-left: 25px;">`;
+                    for (const opt of q.options) {
+                        qHtml += `
+                            <div style="margin-bottom: 4px;">
+                                <strong style="margin-right: 5px;">${opt.id}.</strong>${opt.content}
+                            </div>
+                        `;
+                    }
+                    qHtml += `</div>`;
+                } else if (q.type === 'true_false' && q.options) {
+                    qHtml += `<div style="margin-top: 5px; margin-left: 25px;">`;
+                    for (const opt of q.options) {
+                        qHtml += `
+                            <div style="margin-bottom: 4px; display: flex; justify-content: space-between; max-width: 480px;">
+                                <span><strong>${opt.id.toLowerCase()})</strong> ${opt.content}</span>
+                                <span style="color: #444; font-style: italic; font-size: 12px;">[ Đúng / Sai ]</span>
+                            </div>
+                        `;
+                    }
+                    qHtml += `</div>`;
+                } else if (q.type === 'short_answer') {
+                    qHtml += `
+                        <div style="margin-top: 6px; margin-left: 25px; font-style: italic; color: #333;">
+                            Đáp số: ........................................................................
+                        </div>
+                    `;
+                } else if (q.type === 'essay') {
+                    qHtml += `
+                        <div style="margin-top: 8px; margin-left: 25px; font-style: italic; color: #555; line-height: 2;">
+                            Bài làm:<br/>
+                            ................................................................................................................................................<br/>
+                            ................................................................................................................................................
+                        </div>
+                    `;
+                }
+
+                qHtml += `</div>`;
+                return qHtml;
+            };
+
+            // 2. Render nội dung đề thi
+            const sections = exam.matrix.sections;
+            if (sections && sections.length > 0) {
+                for (const sec of sections) {
+                    const secQuestions = exam.questions.filter(q => q.sectionId === sec.id);
+                    if (secQuestions.length === 0) continue;
+
+                    htmlContent += `
+                        <div style="margin-top: 25px; margin-bottom: 10px; page-break-inside: avoid;">
+                            <strong style="text-transform: uppercase; font-size: 14.5px;">${sec.name}</strong>
+                            <div style="font-style: italic; font-size: 12.5px; margin-top: 3px; margin-bottom: 12px;">${sec.instruction}</div>
+                        </div>
+                    `;
+
+                    if (sec.passage) {
+                        htmlContent += `
+                            <div style="border-left: 3px solid #000; padding-left: 15px; margin: 15px 0 20px 10px; font-style: italic; font-size: 14px; white-space: pre-wrap; line-height: 1.6; background-color: #fafafa; padding-top: 8px; padding-bottom: 8px; padding-right: 8px;">
+                                <strong>Đọc hiểu ngữ liệu sau đây:</strong><br/>
+                                ${sec.passage}
+                            </div>
+                        `;
+                    }
+
+                    for (const q of secQuestions) {
+                        htmlContent += renderQ(q);
+                    }
+                }
+            } else {
+                for (const q of exam.questions) {
+                    htmlContent += renderQ(q);
+                }
+            }
+
+            printContainer.innerHTML = htmlContent;
             document.body.appendChild(printContainer);
 
             const opt = {
@@ -166,12 +249,19 @@ export function Workspace({
 
             await html2pdf().set(opt).from(printContainer).save();
             
-            // Dọn dẹp DOM
+            // Dọn dẹp DOM clone
             document.body.removeChild(printContainer);
             Swal.close();
         } catch (error: any) {
             console.error('PDF Export Error:', error);
             Swal.fire('Lỗi xuất PDF', error.message || 'Không thể tạo file PDF.', 'error');
+        } finally {
+            // Khôi phục lại các stylesheet trên trang chính
+            disabledSheets.forEach(sheet => {
+                try {
+                    sheet.disabled = false;
+                } catch (e) {}
+            });
         }
     };
 
