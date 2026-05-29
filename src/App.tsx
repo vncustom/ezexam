@@ -50,68 +50,159 @@ export default function App() {
   const handleTextExtracted = async (text: string) => {
       setPdfText(text);
       setStep(1); // Moving to Matrix state, but we need to analyze first
-      
-      const prompt = `Phân tích chi tiết văn bản đề thi sau đây để trích xuất cấu trúc ma trận và phân chia các phần thi chi tiết.
-Nhiệm vụ:
-1. Xác định môn học (subject).
-2. Xác định thời gian làm bài (mặc định là 45 nếu không thấy) bằng số phút.
-3. Đếm tổng số câu hỏi (totalQuestions).
-4. Liệt kê các chuyên đề kiến thức (topics) và phân bổ mức độ nhận thức (difficulties: "Nhận biết", "Thông hiểu", "Vận dụng", "Vận dụng cao") trên phạm vi toàn đề.
-5. Phân chia đề thi thành các Phần thi (sections). Một phần thi đại diện cho một cụm câu hỏi cùng định dạng hoặc chung một ngữ liệu/bài đọc:
-   - Các câu hỏi trắc nghiệm thông thường (chọn 1 đáp án A/B/C/D) -> questionType: "multiple_choice"
-   - Các câu hỏi Đúng/Sai (có 4 ý a, b, c, d cần chọn Đúng hoặc Sai cho mỗi ý) -> questionType: "true_false"
-   - Các câu hỏi điền số/trả lời ngắn -> questionType: "short_answer"
-   - Các câu hỏi tự luận -> questionType: "essay"
-   - Nếu có một ĐOẠN VĂN ĐỌC HIỂU (reading passage) hoặc ĐOẠN VĂN ĐIỀN TỪ (cloze passage) dùng chung cho một cụm câu hỏi, hãy tạo một section riêng cho cụm này, trích xuất đoạn văn đó vào trường "passage", và nhóm các câu hỏi liên quan vào section đó.
-   - Với mỗi câu hỏi trong từng phần, hãy điền:
-     + originalId: số thứ tự của câu (ví dụ: "1", "2")
-     + topic: chuyên đề của câu đó
-     + difficulty: mức độ khó ("Nhận biết", "Thông hiểu", "Vận dụng", "Vận dụng cao")
-     + stemDescription: Mô tả cực kỳ ngắn gọn yêu cầu cốt lõi câu hỏi kiểm tra (ví dụ: "Tính đạo hàm hàm hợp bậc ba", "Tìm từ đồng nghĩa của từ 'remarkable'", "Tìm từ phát âm khác biệt phần gạch chân").
 
-Trả về kết quả chuẩn JSON theo đúng định dạng sau, KHÔNG thêm bất kỳ text nào ngoài JSON:
+      const systemInstruction = `Bạn là chuyên gia phân tích đề thi giáo dục Việt Nam, am hiểu Công văn 7991/BGDĐT-GDTrH ngày 17/12/2024 về cấu trúc ma trận đề kiểm tra định kì. Bạn có khả năng:
+- Nhận diện chính xác 4 dạng câu hỏi: Nhiều lựa chọn (TNKQ 4 phương án A/B/C/D), Đúng-Sai (4 ý nhỏ a/b/c/d chọn Đúng hoặc Sai), Trả lời ngắn (điền số/kết quả ngắn), Tự luận (viết bài giải).
+- Phân loại mức độ nhận thức: Nhận biết (nhớ, nhận ra), Thông hiểu (giải thích, so sánh), Vận dụng (áp dụng vào tình huống quen), Vận dụng cao (phân tích, đánh giá, sáng tạo trong tình huống mới).
+- Xây dựng ma trận 2 chiều: Chủ đề (hàng) × Dạng câu hỏi × Mức độ (cột).
+Luôn trả về JSON hợp lệ, không bao giờ thêm text ngoài JSON.`;
+      
+      const prompt = `NHIỆM VỤ: Phân tích chi tiết văn bản đề thi/kiểm tra sau để trích xuất cấu trúc MA TRẬN ĐỀ KIỂM TRA ĐỊNH KÌ theo đúng mẫu Công văn 7991/BGDĐT-GDTrH.
+
+=== HƯỚNG DẪN PHÂN TÍCH ===
+
+**BƯỚC 1: Nhận diện thông tin chung**
+- Xác định môn học (subject)
+- Xác định thời gian làm bài (mặc định 45 phút nếu không rõ)
+- Đếm tổng số câu hỏi
+- Tổng điểm (mặc định 10 điểm nếu không rõ)
+
+**BƯỚC 2: Phân loại từng câu hỏi theo 4 dạng TNKQ + Tự luận**
+Xác định CHÍNH XÁC dạng câu hỏi cho từng câu:
+1. "multiple_choice" (Nhiều lựa chọn): Câu hỏi có 4 phương án A/B/C/D, chọn 1 đáp án đúng
+2. "true_false" (Đúng – Sai): Câu hỏi có 4 ý nhỏ a/b/c/d, mỗi ý phải xác định Đúng hoặc Sai
+3. "short_answer" (Trả lời ngắn): Câu hỏi yêu cầu điền số, kết quả ngắn (không có đáp án cho sẵn)
+4. "essay" (Tự luận): Câu hỏi yêu cầu trình bày, chứng minh, giải bài toán dài
+
+**BƯỚC 3: Phân loại mức độ nhận thức cho từng câu**
+- "Nhận biết": Nhớ, nhận ra kiến thức cơ bản (định nghĩa, công thức, khái niệm)
+- "Thông hiểu": Giải thích, so sánh, diễn đạt lại, chuyển đổi dạng
+- "Vận dụng": Áp dụng kiến thức vào tình huống quen thuộc, giải bài tập cơ bản
+- "Vận dụng cao": Phân tích, đánh giá, tổng hợp, sáng tạo trong tình huống mới/phức tạp
+
+**BƯỚC 4: Xác định chủ đề kiến thức (topics) của từng câu**
+- Nhóm các câu hỏi theo chủ đề/chương
+- Mỗi chủ đề phải có tên rõ ràng
+
+**BƯỚC 5: Xây dựng ma trận 2 chiều**
+- Tạo mảng matrixCells: mỗi phần tử là 1 ô trong bảng ma trận (chủ đề × dạng × mức độ)
+- Tính phân bổ điểm theo dạng câu hỏi (questionTypeAllocations)
+- Tính phân bổ điểm theo mức độ nhận thức (difficultyAllocations)
+- Quy tắc tính điểm mặc định (nếu đề không ghi rõ):
+  + TNKQ Nhiều lựa chọn: mỗi câu 0.25 điểm
+  + TNKQ Đúng-Sai: mỗi câu 1 điểm (0.25/ý × 4 ý; hoặc 0.1 điểm nếu đúng 1 ý, 0.25 điểm nếu đúng 2 ý, 0.5 điểm nếu đúng 3-4 ý — tùy đề)
+  + TNKQ Trả lời ngắn: mỗi câu 0.5 điểm
+  + Tự luận: điểm ghi trong đề (nếu không rõ thì chia đều)
+
+**BƯỚC 6: Phân chia sections (các phần thi)**
+- Nhóm câu hỏi thành các phần thi cùng dạng (giống logic cũ)
+- Nếu có bài đọc hiểu/ngữ liệu chung → tạo section riêng với trường passage
+
+=== QUY TẮC TỶ LỆ CHUẨN CV 7991 (tham khảo, có thể điều chỉnh theo đề thực tế) ===
+- TNKQ Nhiều lựa chọn: ~30% (3,0 điểm / 10)
+- TNKQ Đúng – Sai: ~20% (2,0 điểm / 10)  
+- TNKQ Trả lời ngắn: ~20% (2,0 điểm / 10)
+- Tự luận: ~30% (3,0 điểm / 10)
+- Mức độ Nhận biết: ~40% (4,0 điểm)
+- Mức độ Thông hiểu: ~30% (3,0 điểm)
+- Mức độ Vận dụng + Vận dụng cao: ~30% (3,0 điểm)
+LƯU Ý: Đây là tỷ lệ tham khảo. Nếu đề thực tế có tỷ lệ khác thì hãy dùng tỷ lệ thực tế. Nếu đề không có một dạng nào (VD: không có Trả lời ngắn) thì đặt phần đó = 0.
+
+=== ĐỊNH DẠNG JSON OUTPUT ===
+Trả về CHỈ JSON hợp lệ, KHÔNG thêm markdown hay text nào ngoài JSON:
 {
   "subject": "Tên môn học",
-  "durationMinutes": 60,
-  "totalQuestions": 50,
-  "topics": [{"name": "Tên chuyên đề", "count": 10}, ...],
+  "durationMinutes": 45,
+  "totalQuestions": 40,
+  "totalPoints": 10,
+  "topics": [
+    {"name": "Chủ đề 1", "count": 10},
+    {"name": "Chủ đề 2", "count": 8}
+  ],
   "difficulties": [
-      {"level": "Nhận biết", "count": 20},
-      {"level": "Thông hiểu", "count": 15},
-      {"level": "Vận dụng", "count": 10},
-      {"level": "Vận dụng cao", "count": 5}
+    {"level": "Nhận biết", "count": 16},
+    {"level": "Thông hiểu", "count": 12},
+    {"level": "Vận dụng", "count": 8},
+    {"level": "Vận dụng cao", "count": 4}
+  ],
+  "matrixCells": [
+    {"topicName": "Chủ đề 1", "questionType": "multiple_choice", "difficulty": "Nhận biết", "questionCount": 3, "questionIds": ["1","2","3"]},
+    {"topicName": "Chủ đề 1", "questionType": "multiple_choice", "difficulty": "Thông hiểu", "questionCount": 2, "questionIds": ["4","5"]},
+    {"topicName": "Chủ đề 1", "questionType": "true_false", "difficulty": "Vận dụng", "questionCount": 1, "questionIds": ["25"]},
+    {"topicName": "Chủ đề 2", "questionType": "essay", "difficulty": "Vận dụng cao", "questionCount": 1, "questionIds": ["39"]}
+  ],
+  "questionTypeAllocations": [
+    {"type": "multiple_choice", "label": "Nhiều lựa chọn", "totalPoints": 3.0, "percentage": 30},
+    {"type": "true_false", "label": "Đúng – Sai", "totalPoints": 2.0, "percentage": 20},
+    {"type": "short_answer", "label": "Trả lời ngắn", "totalPoints": 2.0, "percentage": 20},
+    {"type": "essay", "label": "Tự luận", "totalPoints": 3.0, "percentage": 30}
+  ],
+  "difficultyAllocations": [
+    {"level": "Nhận biết", "totalPoints": 4.0, "percentage": 40},
+    {"level": "Thông hiểu", "totalPoints": 3.0, "percentage": 30},
+    {"level": "Vận dụng", "totalPoints": 2.0, "percentage": 20},
+    {"level": "Vận dụng cao", "totalPoints": 1.0, "percentage": 10}
   ],
   "sections": [
     {
       "id": "sec-1",
-      "name": "PHẦN I: ...",
-      "instruction": "Hướng dẫn làm bài...",
+      "name": "PHẦN I: Trắc nghiệm nhiều lựa chọn",
+      "instruction": "Chọn 1 đáp án đúng trong 4 phương án A, B, C, D",
       "questionType": "multiple_choice",
-      "passage": "Nội dung đoạn văn đọc hiểu nếu có, nếu không thì bỏ qua trường này",
       "questions": [
         {
           "originalId": "1",
-          "topic": "Chuyên đề của câu",
-          "difficulty": "Mức độ",
-          "stemDescription": "Mô tả cốt lõi yêu cầu câu hỏi"
+          "topic": "Chủ đề 1",
+          "difficulty": "Nhận biết",
+          "stemDescription": "Mô tả ngắn gọn yêu cầu cốt lõi của câu hỏi"
         }
       ]
+    },
+    {
+      "id": "sec-2",
+      "name": "PHẦN II: Trắc nghiệm Đúng – Sai",
+      "instruction": "Mỗi câu có 4 ý a, b, c, d. Với mỗi ý, chọn Đúng hoặc Sai",
+      "questionType": "true_false",
+      "questions": [...]
+    },
+    {
+      "id": "sec-3",
+      "name": "PHẦN III: Trả lời ngắn",
+      "instruction": "Trả lời ngắn gọn (điền số hoặc kết quả)",
+      "questionType": "short_answer",
+      "questions": [...]
+    },
+    {
+      "id": "sec-4",
+      "name": "PHẦN IV: Tự luận",
+      "instruction": "Trình bày lời giải chi tiết",
+      "questionType": "essay",
+      "questions": [...]
     }
   ]
 }
 
-VĂN BẢN ĐỀ THI:
+=== QUY TẮC QUAN TRỌNG ===
+1. Mảng "matrixCells" phải bao phủ TẤT CẢ các câu hỏi. Tổng questionCount trong matrixCells phải = totalQuestions.
+2. Chỉ tạo matrixCells cho các ô có questionCount > 0. Không tạo ô rỗng.
+3. Nếu đề không có dạng Đúng-Sai hoặc Trả lời ngắn, vẫn phải có phần tử trong questionTypeAllocations nhưng totalPoints = 0, percentage = 0.
+4. "sections" phải chứa ĐẦY ĐỦ tất cả câu hỏi với stemDescription rõ ràng.
+5. Mảng "topics" chỉ chứa các chủ đề CÓ câu hỏi, count = tổng số câu theo chủ đề đó.
+6. Nếu đề có bài đọc hiểu/ngữ liệu chung cho nhiều câu → tạo section riêng + trường "passage".
+
+VĂN BẢN ĐỀ THI CẦN PHÂN TÍCH:
 ${text.substring(0, 30000)}
 `;
 
       Swal.fire({
-          title: 'Đang dùng AI phân tích cấu trúc đề...',
+          title: 'Đang dùng AI phân tích cấu trúc đề theo CV 7991...',
+          html: '<p style="font-size:13px;color:#64748b">Xây dựng ma trận 2 chiều: Chủ đề × Dạng câu hỏi × Mức độ nhận thức</p>',
           allowOutsideClick: false,
           didOpen: () => Swal.showLoading()
       });
 
       try {
-          const resp = await callGemini({ prompt, model: getStoredModel() }, getStoredApiKey());
+          const resp = await callGemini({ prompt, model: getStoredModel(), systemInstruction }, getStoredApiKey());
           setMatrix(resp);
           Swal.close();
       } catch (e: any) {

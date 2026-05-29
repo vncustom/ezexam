@@ -1,6 +1,22 @@
-import { ExamMatrix } from "../types";
+import { ExamMatrix, ExamMatrixCell } from "../types";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { Settings2, Wand2 } from "lucide-react";
+import { Settings2, Wand2, Table2 } from "lucide-react";
+
+const QUESTION_TYPES = [
+    { type: 'multiple_choice' as const, label: 'Nhiều lựa chọn', shortLabel: 'TNKQ NLC' },
+    { type: 'true_false' as const, label: 'Đúng – Sai', shortLabel: 'TNKQ ĐS' },
+    { type: 'short_answer' as const, label: 'Trả lời ngắn', shortLabel: 'TNKQ TLN' },
+    { type: 'essay' as const, label: 'Tự luận', shortLabel: 'Tự luận' },
+] as const;
+
+const DIFFICULTIES = ['Nhận biết', 'Thông hiểu', 'Vận dụng', 'Vận dụng cao'] as const;
+
+const DIFF_SHORT: Record<string, string> = {
+    'Nhận biết': 'Biết',
+    'Thông hiểu': 'Hiểu',
+    'Vận dụng': 'VD',
+    'Vận dụng cao': 'VDC',
+};
 
 export function MatrixDashboard({ 
     matrix, 
@@ -11,8 +27,13 @@ export function MatrixDashboard({
     onMatrixChange: (m: ExamMatrix) => void,
     onGenerate: () => void 
 }) {
-    // Keep it fitting into the Workspace layout
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+    const TYPE_COLORS: Record<string, string> = {
+        'multiple_choice': '#6366f1',
+        'true_false': '#0ea5e9',
+        'short_answer': '#f97316',
+        'essay': '#8b5cf6',
+    };
     
     const updateTopicCount = (index: number, val: number) => {
         const newTopics = [...matrix.topics];
@@ -23,10 +44,73 @@ export function MatrixDashboard({
     const totalTopics = matrix.topics.reduce((acc, t) => acc + t.count, 0);
     const isMatrixValid = totalTopics === matrix.totalQuestions;
 
+    // Helper: get cell count from matrixCells
+    const getCellCount = (topicName: string, qType: string, diff: string): number => {
+        if (!matrix.matrixCells) return 0;
+        const cell = matrix.matrixCells.find(c => 
+            c.topicName === topicName && c.questionType === qType && c.difficulty === diff
+        );
+        return cell?.questionCount || 0;
+    };
+
+    // Helper: get cell question IDs
+    const getCellIds = (topicName: string, qType: string, diff: string): string[] => {
+        if (!matrix.matrixCells) return [];
+        const cell = matrix.matrixCells.find(c => 
+            c.topicName === topicName && c.questionType === qType && c.difficulty === diff
+        );
+        return cell?.questionIds || [];
+    };
+
+    // Topic row totals
+    const getTopicTotal = (topicName: string): number => {
+        if (!matrix.matrixCells) return 0;
+        return matrix.matrixCells
+            .filter(c => c.topicName === topicName)
+            .reduce((acc, c) => acc + c.questionCount, 0);
+    };
+
+    // Column totals (qType × diff)
+    const getColTotal = (qType: string, diff: string): number => {
+        if (!matrix.matrixCells) return 0;
+        return matrix.matrixCells
+            .filter(c => c.questionType === qType && c.difficulty === diff)
+            .reduce((acc, c) => acc + c.questionCount, 0);
+    };
+
+    // Question type totals
+    const getQTypeTotal = (qType: string): number => {
+        if (!matrix.matrixCells) return 0;
+        return matrix.matrixCells
+            .filter(c => c.questionType === qType)
+            .reduce((acc, c) => acc + c.questionCount, 0);
+    };
+
+    // Determine which question types actually have questions
+    const activeQTypes = QUESTION_TYPES.filter(qt => {
+        if (!matrix.matrixCells) return true;
+        return matrix.matrixCells.some(c => c.questionType === qt.type && c.questionCount > 0) ||
+               (matrix.questionTypeAllocations?.some(a => a.type === qt.type && (a.totalPoints > 0 || a.percentage > 0)));
+    });
+
+    // Determine which difficulties to show (collapse VD + VDC if either exists)
+    const activeDifficulties = DIFFICULTIES.filter(d => {
+        if (!matrix.matrixCells) return true;
+        return matrix.matrixCells.some(c => c.difficulty === d && c.questionCount > 0);
+    });
+
+    // Use 3-level grouping for compact display: Biết, Hiểu, VD (merge VD + VDC)
+    const showVDC = activeDifficulties.includes('Vận dụng cao');
+    const displayDifficulties = showVDC 
+        ? activeDifficulties 
+        : activeDifficulties.filter(d => d !== 'Vận dụng cao');
+
+    const hasMatrixData = matrix.matrixCells && matrix.matrixCells.length > 0;
+
     return (
         <section className="flex-1 p-6 bg-slate-100 flex flex-col overflow-y-auto items-center">
             
-            <div className="w-full max-w-5xl flex flex-col gap-6 mt-4 pb-12">
+            <div className="w-full max-w-6xl flex flex-col gap-6 mt-4 pb-12">
                
                 {/* Top: 2 column cards for metadata & topics */}
                 <div className="flex flex-col lg:flex-row gap-6">
@@ -34,7 +118,7 @@ export function MatrixDashboard({
                     <div className="flex-1 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] border border-slate-100 rounded-xl flex flex-col overflow-hidden">
                         <div className="p-8 border-b border-slate-100">
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">Ma trận Đề thi: {matrix.subject}</h2>
-                            <p className="text-sm text-slate-600">AI đã phân tích cấu trúc xong. Bạn có thể tùy chỉnh lại trọng số trước khi xuất đề mới.</p>
+                            <p className="text-sm text-slate-600">AI đã phân tích cấu trúc theo mẫu CV 7991/BGDĐT-GDTrH. Bạn có thể tùy chỉnh trước khi xuất đề mới.</p>
                             {!isMatrixValid && (
                                 <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 font-medium flex items-center gap-2">
                                     <span>⚠️</span>
@@ -42,51 +126,97 @@ export function MatrixDashboard({
                                 </div>
                             )}
                         </div>
-                        <div className="p-8 grid grid-cols-2 gap-8">
+                        <div className="p-8 grid grid-cols-3 gap-6">
                             <div>
-                                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Thời gian làm bài</div>
-                                <div className="text-3xl font-bold text-slate-900">{matrix.durationMinutes} <span className="text-base font-normal text-slate-500">phút</span></div>
+                                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Thời gian</div>
+                                <div className="text-2xl font-bold text-slate-900">{matrix.durationMinutes} <span className="text-sm font-normal text-slate-500">phút</span></div>
                             </div>
                             <div>
-                                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Tổng số câu</div>
-                                <div className="text-3xl font-bold text-slate-900">{matrix.totalQuestions} <span className="text-base font-normal text-slate-500">câu</span></div>
+                                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Tổng câu</div>
+                                <div className="text-2xl font-bold text-slate-900">{matrix.totalQuestions} <span className="text-sm font-normal text-slate-500">câu</span></div>
+                            </div>
+                            <div>
+                                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Tổng điểm</div>
+                                <div className="text-2xl font-bold text-slate-900">{matrix.totalPoints || 10} <span className="text-sm font-normal text-slate-500">điểm</span></div>
                             </div>
                         </div>
                         
+                        {/* Question Type Allocation Cards */}
+                        {matrix.questionTypeAllocations && matrix.questionTypeAllocations.length > 0 && (
+                            <div className="px-8 pb-6 border-t border-slate-100 pt-5">
+                                <h3 className="font-bold text-sm mb-3 text-slate-700 uppercase tracking-wider">Phân bổ theo Dạng câu hỏi</h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {matrix.questionTypeAllocations.map((alloc, i) => (
+                                        <div key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2.5 border border-slate-200/60">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: TYPE_COLORS[alloc.type] || '#94a3b8'}}></div>
+                                                <span className="text-xs font-medium text-slate-700">{alloc.label}</span>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-sm font-bold text-slate-900">{alloc.totalPoints}</span>
+                                                <span className="text-[10px] text-slate-500 ml-1">đ ({alloc.percentage}%)</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Difficulty Allocation with PieChart */}
                         <div className="p-8 flex-1 border-t border-slate-100 flex flex-col">
-                            <h3 className="font-bold text-base mb-4 text-slate-900">Phân bổ Mức độ Nhận thức</h3>
-                            <div className="flex-1 min-h-[200px] relative">
+                            <h3 className="font-bold text-sm mb-3 text-slate-700 uppercase tracking-wider">Phân bổ Mức độ Nhận thức</h3>
+                            
+                            {matrix.difficultyAllocations && matrix.difficultyAllocations.length > 0 ? (
+                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                    {matrix.difficultyAllocations.map((alloc, i) => (
+                                        <div key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2.5 border border-slate-200/60">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: COLORS[i]}}></div>
+                                                <span className="text-xs font-medium text-slate-700">{alloc.level}</span>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-sm font-bold text-slate-900">{alloc.totalPoints}</span>
+                                                <span className="text-[10px] text-slate-500 ml-1">đ ({alloc.percentage}%)</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                /* Fallback: use old difficulties array */
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    {matrix.difficulties.map((d, i) => (
+                                        <div key={i} className="flex justify-between items-center text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 rounded-full" style={{backgroundColor: COLORS[i]}}></div>
+                                                <span className="text-slate-700">{d.level}</span>
+                                            </div>
+                                            <span className="font-bold">{d.count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex-1 min-h-[180px] relative">
                                  <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
-                                            data={matrix.difficulties}
+                                            data={matrix.difficultyAllocations || matrix.difficulties}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={90}
+                                            innerRadius={55}
+                                            outerRadius={80}
                                             paddingAngle={2}
-                                            dataKey="count"
+                                            dataKey={matrix.difficultyAllocations ? "totalPoints" : "count"}
                                             nameKey="level"
                                             stroke="none"
                                         >
-                                            {matrix.difficulties.map((entry, index) => (
+                                            {(matrix.difficultyAllocations || matrix.difficulties).map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
                                         <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}/>
                                     </PieChart>
                                 </ResponsiveContainer>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 mt-6">
-                                {matrix.difficulties.map((d, i) => (
-                                    <div key={i} className="flex justify-between items-center text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded-full" style={{backgroundColor: COLORS[i]}}></div>
-                                            <span className="text-slate-700">{d.level}</span>
-                                        </div>
-                                        <span className="font-bold">{d.count}</span>
-                                    </div>
-                                ))}
                             </div>
                         </div>
                     </div>
@@ -136,7 +266,153 @@ export function MatrixDashboard({
                     </div>
                 </div>
 
-                {/* Bottom: Detailed Sections Layout */}
+                {/* === MA TRẬN 2 CHIỀU THEO CV 7991 === */}
+                {hasMatrixData && (
+                    <div className="bg-white rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)] border border-slate-100">
+                        <div className="flex items-center gap-2 mb-5">
+                            <Table2 size={20} className="text-indigo-600" />
+                            <h3 className="font-bold text-lg text-slate-900">Ma trận đề kiểm tra (CV 7991)</h3>
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-xs">
+                                {/* Header Row 1: Question Types */}
+                                <thead>
+                                    <tr className="bg-indigo-50">
+                                        <th rowSpan={2} className="border border-slate-300 px-2 py-2 text-center font-bold text-slate-700 min-w-[32px]">TT</th>
+                                        <th rowSpan={2} className="border border-slate-300 px-3 py-2 text-left font-bold text-slate-700 min-w-[100px]">Chủ đề / Chương</th>
+                                        {activeQTypes.map(qt => (
+                                            <th 
+                                                key={qt.type} 
+                                                colSpan={displayDifficulties.length} 
+                                                className="border border-slate-300 px-2 py-2 text-center font-bold"
+                                                style={{ color: TYPE_COLORS[qt.type] }}
+                                            >
+                                                {qt.label}
+                                            </th>
+                                        ))}
+                                        <th rowSpan={2} className="border border-slate-300 px-2 py-2 text-center font-bold text-slate-700 bg-slate-100 min-w-[50px]">Tổng</th>
+                                    </tr>
+                                    {/* Header Row 2: Difficulties */}
+                                    <tr className="bg-slate-50">
+                                        {activeQTypes.map(qt => (
+                                            displayDifficulties.map(diff => (
+                                                <th key={`${qt.type}-${diff}`} className="border border-slate-300 px-1.5 py-1.5 text-center font-semibold text-slate-600 min-w-[36px]">
+                                                    {DIFF_SHORT[diff] || diff}
+                                                </th>
+                                            ))
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {/* Topic Rows */}
+                                    {matrix.topics.map((topic, idx) => (
+                                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                            <td className="border border-slate-300 px-2 py-2 text-center font-semibold text-slate-600">{idx + 1}</td>
+                                            <td className="border border-slate-300 px-3 py-2 text-slate-800 font-medium">{topic.name}</td>
+                                            {activeQTypes.map(qt => (
+                                                displayDifficulties.map(diff => {
+                                                    const count = getCellCount(topic.name, qt.type, diff);
+                                                    const ids = getCellIds(topic.name, qt.type, diff);
+                                                    return (
+                                                        <td 
+                                                            key={`${qt.type}-${diff}`} 
+                                                            className={`border border-slate-300 px-1.5 py-2 text-center ${count > 0 ? 'font-bold text-slate-800' : 'text-slate-300'}`}
+                                                            title={ids.length > 0 ? `Câu: ${ids.join(', ')}` : ''}
+                                                        >
+                                                            {count > 0 ? count : ''}
+                                                        </td>
+                                                    );
+                                                })
+                                            ))}
+                                            <td className="border border-slate-300 px-2 py-2 text-center font-bold text-slate-900 bg-slate-50">
+                                                {getTopicTotal(topic.name) || topic.count}
+                                            </td>
+                                        </tr>
+                                    ))}
+
+                                    {/* Totals Row: Tổng số câu */}
+                                    <tr className="bg-indigo-50/50 font-bold">
+                                        <td colSpan={2} className="border border-slate-300 px-3 py-2 text-right text-slate-700">Tổng số câu</td>
+                                        {activeQTypes.map(qt => (
+                                            displayDifficulties.map(diff => (
+                                                <td key={`total-${qt.type}-${diff}`} className="border border-slate-300 px-1.5 py-2 text-center text-slate-800">
+                                                    {getColTotal(qt.type, diff) || ''}
+                                                </td>
+                                            ))
+                                        ))}
+                                        <td className="border border-slate-300 px-2 py-2 text-center text-indigo-700 bg-indigo-100/50">
+                                            {matrix.totalQuestions}
+                                        </td>
+                                    </tr>
+
+                                    {/* Tổng điểm row */}
+                                    {matrix.questionTypeAllocations && (
+                                        <tr className="bg-amber-50/50 font-bold">
+                                            <td colSpan={2} className="border border-slate-300 px-3 py-2 text-right text-slate-700">Tổng số điểm</td>
+                                            {activeQTypes.map(qt => {
+                                                const alloc = matrix.questionTypeAllocations!.find(a => a.type === qt.type);
+                                                return (
+                                                    <td 
+                                                        key={`pts-${qt.type}`} 
+                                                        colSpan={displayDifficulties.length} 
+                                                        className="border border-slate-300 px-1.5 py-2 text-center text-slate-800"
+                                                    >
+                                                        {alloc ? alloc.totalPoints.toFixed(1) : '0'}
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="border border-slate-300 px-2 py-2 text-center text-amber-700 bg-amber-100/50">
+                                                {matrix.totalPoints || 10}
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {/* Tỷ lệ % row */}
+                                    {matrix.questionTypeAllocations && (
+                                        <tr className="bg-emerald-50/50 font-bold">
+                                            <td colSpan={2} className="border border-slate-300 px-3 py-2 text-right text-slate-700">Tỉ lệ %</td>
+                                            {activeQTypes.map(qt => {
+                                                const alloc = matrix.questionTypeAllocations!.find(a => a.type === qt.type);
+                                                return (
+                                                    <td 
+                                                        key={`pct-${qt.type}`} 
+                                                        colSpan={displayDifficulties.length} 
+                                                        className="border border-slate-300 px-1.5 py-2 text-center text-slate-800"
+                                                    >
+                                                        {alloc ? `${alloc.percentage}%` : '0%'}
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="border border-slate-300 px-2 py-2 text-center text-emerald-700 bg-emerald-100/50">
+                                                100%
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Difficulty allocation footer */}
+                        {matrix.difficultyAllocations && (
+                            <div className="mt-4 pt-3 border-t border-slate-200">
+                                <div className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Tỷ lệ mức độ nhận thức tổng thể</div>
+                                <div className="flex flex-wrap gap-3">
+                                    {matrix.difficultyAllocations.map((alloc, i) => (
+                                        <div key={i} className="flex items-center gap-1.5 bg-slate-50 rounded-full px-3 py-1.5 border border-slate-200/60">
+                                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: COLORS[i]}}></div>
+                                            <span className="text-xs text-slate-600">{alloc.level}:</span>
+                                            <span className="text-xs font-bold text-slate-800">{alloc.totalPoints}đ</span>
+                                            <span className="text-[10px] text-slate-500">({alloc.percentage}%)</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Bottom: Detailed Sections Layout (kept from original) */}
                 {matrix.sections && matrix.sections.length > 0 && (
                     <div className="bg-white rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)] border border-slate-100">
                         <h3 className="font-bold text-lg mb-4 text-slate-900 border-b border-slate-100 pb-2">Cấu trúc chi tiết phần thi</h3>
