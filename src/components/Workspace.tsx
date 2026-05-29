@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Exam } from "../types";
 import { QuestionCard } from "./QuestionCard";
-import { Loader2, FileDown, Shuffle, Save, FileText } from "lucide-react";
+import { Loader2, FileDown, Shuffle, Save, FileText, Wand2 } from "lucide-react";
 // @ts-ignore
 import html2pdf from "html2pdf.js";
 import { exportExamToDocx } from "../lib/docx";
@@ -14,6 +14,8 @@ export function Workspace({
     isGenerating,
     onShuffleAnswers,
     onEditQuestion,
+    onGenerateAnswers,
+    isGeneratingAnswers = false,
 }: {
     exam: Exam | null;
     onRegenerateQuestion: (qId: string) => void;
@@ -21,6 +23,8 @@ export function Workspace({
     isGenerating: boolean;
     onShuffleAnswers?: () => void;
     onEditQuestion?: (qId: string, updated: Partial<import('../types').Question>) => void;
+    onGenerateAnswers?: () => void;
+    isGeneratingAnswers?: boolean;
 }) {
     const [viewMode, setViewMode] = useState<'both' | 'exam' | 'solution'>('both');
     const [isExportingDocx, setIsExportingDocx] = useState(false);
@@ -172,7 +176,28 @@ export function Workspace({
             {/* Solution Panel */}
             <div className={`flex-[0.8] flex flex-col gap-5 overflow-y-auto no-scrollbar pb-10 lg:pb-0 ${viewMode === 'exam' ? 'hidden lg:flex' : 'flex'}`}>
                 <div className="bg-white rounded-xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.1)] border border-slate-100 flex flex-col min-h-0 h-full">
-                    <h3 className="font-bold text-base mb-4 text-slate-900 pb-2 border-b border-slate-100 shrink-0">Đáp án & Giải thích</h3>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100 shrink-0">
+                        <h3 className="font-bold text-base text-slate-900">Đáp án & Giải thích</h3>
+                        {onGenerateAnswers && (
+                            <button
+                                onClick={onGenerateAnswers}
+                                disabled={isGeneratingAnswers}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-sm border-none cursor-pointer flex items-center gap-1 transition-all"
+                            >
+                                {isGeneratingAnswers ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        Đang giải đề...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Wand2 size={12} />
+                                        Tạo Đáp Án Tự Động
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
 
                     <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4">
                         {renderQuestionsList(true)}

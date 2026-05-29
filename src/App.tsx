@@ -21,6 +21,7 @@ export default function App() {
   const [currentExam, setCurrentExam] = useState<Exam | null>(null);
   const [history, setHistory] = useState<Exam[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
 
   useEffect(() => {
     ensureDemoData();
@@ -94,9 +95,15 @@ Xác định CHÍNH XÁC dạng câu hỏi cho từng câu:
   + TNKQ Trả lời ngắn: mỗi câu 0.5 điểm
   + Tự luận: điểm ghi trong đề (nếu không rõ thì chia đều)
 
-**BƯỚC 6: Phân chia sections (các phần thi)**
-- Nhóm câu hỏi thành các phần thi cùng dạng (giống logic cũ)
-- Nếu có bài đọc hiểu/ngữ liệu chung → tạo section riêng với trường passage
+**BƯỚC 6: Phân chia sections (các phần thi & bài đọc hiểu)**
+- Nhóm câu hỏi thành các phần thi cùng dạng hoặc theo bài đọc hiểu (ngữ liệu chung).
+- Nếu đề thi có các đoạn văn đọc hiểu/ngữ liệu riêng biệt (ví dụ: các PASSAGE 1, 2, 3, 4 hoặc bài đọc 1, 2...), bạn phải phân chia thành từng section riêng biệt cho từng bài đọc đó (ví dụ: sec-1 cho bài đọc 1, sec-2 cho bài đọc 2).
+- TRONG MỖI SECTION CÓ BÀI ĐỌC, TRƯỜNG "passage" CHỈ CẦN CHỨA TIÊU ĐỀ HOẶC ĐOẠN THAM CHIẾU NGẮN (ví dụ: "PASSAGE 1 - Bill Gates" hoặc "Bài đọc từ dòng 1 đến dòng 50"), TUYỆT ĐỐI KHÔNG COPY LẠI TOÀN BỘ VĂN BẢN BÀI ĐỌC CỦA ĐỀ THI GỐC để tiết kiệm token đầu ra và tránh việc JSON bị cắt cụt. Nội dung đầy đủ sẽ được AI tra cứu ở Bước 2.
+
+=== BẮT BUỘC NGHIÊM NGẶT ===
+1. BẮT BUỘC liệt kê ĐẦY ĐỦ 100% tất cả câu hỏi xuất hiện trong đề thi gốc vào danh sách "questions" của các "sections".
+   Ví dụ: Nếu đề gốc có 40 câu hỏi, thì tổng số phần tử câu hỏi trong danh sách "questions" của toàn bộ các section cộng lại phải đúng bằng 40 câu. Tuyệt đối không được bỏ sót câu nào hoặc dùng dấu ba chấm "...".
+2. Trường "stemDescription" của mỗi câu hỏi chỉ cần mô tả cực ngắn gọn yêu cầu cốt lõi (dưới 10 từ, ví dụ: "Hỏi về từ đồng nghĩa 'jeopardy'" hoặc "Tính đạo hàm hàm mũ").
 
 === QUY TẮC TỶ LỆ CHUẨN CV 7991 (tham khảo, có thể điều chỉnh theo đề thực tế) ===
 - TNKQ Nhiều lựa chọn: ~30% (3,0 điểm / 10)
@@ -106,7 +113,7 @@ Xác định CHÍNH XÁC dạng câu hỏi cho từng câu:
 - Mức độ Nhận biết: ~40% (4,0 điểm)
 - Mức độ Thông hiểu: ~30% (3,0 điểm)
 - Mức độ Vận dụng + Vận dụng cao: ~30% (3,0 điểm)
-LƯU Ý: Đây là tỷ lệ tham khảo. Nếu đề thực tế có tỷ lệ khác thì hãy dùng tỷ lệ thực tế. Nếu đề không có một dạng nào (VD: không có Trả lời ngắn) thì đặt phần đó = 0.
+LƯU Ý: Nếu đề thực tế có tỷ lệ khác thì hãy dùng tỷ lệ thực tế. Nếu đề không có một dạng nào thì đặt phần đó = 0.
 
 === ĐỊNH DẠNG JSON OUTPUT ===
 Trả về CHỈ JSON hợp lệ, KHÔNG thêm markdown hay text nào ngoài JSON:
@@ -126,10 +133,8 @@ Trả về CHỈ JSON hợp lệ, KHÔNG thêm markdown hay text nào ngoài JSO
     {"level": "Vận dụng cao", "count": 4}
   ],
   "matrixCells": [
-    {"topicName": "Chủ đề 1", "questionType": "multiple_choice", "difficulty": "Nhận biết", "questionCount": 3, "questionIds": ["1","2","3"]},
-    {"topicName": "Chủ đề 1", "questionType": "multiple_choice", "difficulty": "Thông hiểu", "questionCount": 2, "questionIds": ["4","5"]},
-    {"topicName": "Chủ đề 1", "questionType": "true_false", "difficulty": "Vận dụng", "questionCount": 1, "questionIds": ["25"]},
-    {"topicName": "Chủ đề 2", "questionType": "essay", "difficulty": "Vận dụng cao", "questionCount": 1, "questionIds": ["39"]}
+    {"topicName": "Chủ đề 1", "questionType": "multiple_choice", "difficulty": "Nhận biết", "questionCount": 2, "questionIds": ["1","2"]},
+    {"topicName": "Chủ đề 1", "questionType": "multiple_choice", "difficulty": "Thông hiểu", "questionCount": 1, "questionIds": ["3"]}
   ],
   "questionTypeAllocations": [
     {"type": "multiple_choice", "label": "Nhiều lựa chọn", "totalPoints": 3.0, "percentage": 30},
@@ -146,49 +151,27 @@ Trả về CHỈ JSON hợp lệ, KHÔNG thêm markdown hay text nào ngoài JSO
   "sections": [
     {
       "id": "sec-1",
-      "name": "PHẦN I: Trắc nghiệm nhiều lựa chọn",
-      "instruction": "Chọn 1 đáp án đúng trong 4 phương án A, B, C, D",
+      "name": "PHẦN I: Bài đọc hiểu số 1 - Bill Gates",
+      "instruction": "Đọc đoạn văn và chọn đáp án đúng nhất A, B, C hoặc D",
       "questionType": "multiple_choice",
+      "passage": "PASSAGE 1 - Bill Gates (câu 1-10)",
       "questions": [
         {
           "originalId": "1",
           "topic": "Chủ đề 1",
           "difficulty": "Nhận biết",
-          "stemDescription": "Mô tả ngắn gọn yêu cầu cốt lõi của câu hỏi"
+          "stemDescription": "Hỏi về nơi sinh Bill Gates"
+        },
+        {
+          "originalId": "2",
+          "topic": "Chủ đề 1",
+          "difficulty": "Thông hiểu",
+          "stemDescription": "Hỏi về lý do bỏ học"
         }
       ]
-    },
-    {
-      "id": "sec-2",
-      "name": "PHẦN II: Trắc nghiệm Đúng – Sai",
-      "instruction": "Mỗi câu có 4 ý a, b, c, d. Với mỗi ý, chọn Đúng hoặc Sai",
-      "questionType": "true_false",
-      "questions": [...]
-    },
-    {
-      "id": "sec-3",
-      "name": "PHẦN III: Trả lời ngắn",
-      "instruction": "Trả lời ngắn gọn (điền số hoặc kết quả)",
-      "questionType": "short_answer",
-      "questions": [...]
-    },
-    {
-      "id": "sec-4",
-      "name": "PHẦN IV: Tự luận",
-      "instruction": "Trình bày lời giải chi tiết",
-      "questionType": "essay",
-      "questions": [...]
     }
   ]
 }
-
-=== QUY TẮC QUAN TRỌNG ===
-1. Mảng "matrixCells" phải bao phủ TẤT CẢ các câu hỏi. Tổng questionCount trong matrixCells phải = totalQuestions.
-2. Chỉ tạo matrixCells cho các ô có questionCount > 0. Không tạo ô rỗng.
-3. Nếu đề không có dạng Đúng-Sai hoặc Trả lời ngắn, vẫn phải có phần tử trong questionTypeAllocations nhưng totalPoints = 0, percentage = 0.
-4. "sections" phải chứa ĐẦY ĐỦ tất cả câu hỏi với stemDescription rõ ràng.
-5. Mảng "topics" chỉ chứa các chủ đề CÓ câu hỏi, count = tổng số câu theo chủ đề đó.
-6. Nếu đề có bài đọc hiểu/ngữ liệu chung cho nhiều câu → tạo section riêng + trường "passage".
 
 VĂN BẢN ĐỀ THI CẦN PHÂN TÍCH:
 ${text.substring(0, 30000)}
@@ -239,34 +222,35 @@ ${text.substring(0, 30000)}
 
                   for (let sIdx = 0; sIdx < questionSlices.length; sIdx++) {
                       const slice = questionSlices[sIdx];
-                      const totalInSlice = slice.length;
 
                       const prompt = `Bạn là một giáo viên xuất sắc. Nhiệm vụ của bạn là tạo các câu hỏi mới cho đề thi môn ${matrix.subject} dựa trên cấu trúc mô tả dưới đây.
 
+ĐỀ THI GỐC BAN ĐẦU (chứa toàn bộ nội dung đề gốc để tra cứu bài đọc và đối chiếu câu hỏi):
+"""
+${pdfText}
+"""
+
 Yêu cầu chung:
 - KHÔNG dùng lại câu hỏi cũ. Tạo câu hỏi MỚI hoàn toàn, thay đổi số liệu, bối cảnh, câu chữ nhưng giữ nguyên độ khó, chuyên đề và kiểu hỏi.
-- Đảm bảo câu hỏi có tính chất tương đồng về mặt sư phạm (ví dụ: nếu mô tả yêu cầu tính cực trị hàm số bậc ba thì tạo câu mới cũng tính cực trị hàm số bậc ba nhưng có phương trình khác).
+- Đảm bảo câu hỏi có tính chất tương đồng về mặt sư phạm.
 
 Yêu cầu cho phần thi này:
 - Tên phần: "${section.name}"
 - Chỉ dẫn làm bài: "${section.instruction}"
 - Loại câu hỏi: "${section.questionType}"
-${section.passage ? `- BÀI ĐỌC GỐC (để tham khảo chủ đề/độ khó): "${section.passage}"\n=> Hãy tạo ra một BÀI ĐỌC MỚI hoàn toàn tương đương (cùng chủ đề, cùng số chữ, cùng độ khó từ vựng/ngữ pháp). Sau đó đặt các câu hỏi dựa theo bài đọc mới này.` : ''}
-${generatedPassage ? `- BÀI ĐỌC MỚI ĐÃ TẠO (phải dùng bài đọc này để đặt câu hỏi tiếp theo): "${generatedPassage}"` : ''}
+${section.passage ? `- THAM CHIẾU BÀI ĐỌC GỐC: "${section.passage}"\n=> Hãy tìm bài đọc gốc này trong phần "ĐỀ THI GỐC BAN ĐẦU" ở trên (dựa theo tiêu đề, tham chiếu hoặc nội dung tương ứng). Sau đó, hãy tạo ra một BÀI ĐỌC MỚI hoàn toàn tương đương (cùng chủ đề rộng, cùng độ dài khoảng cách từ, cùng độ khó về từ vựng và cấu trúc ngữ pháp). Cuối cùng, đặt các câu hỏi mới dựa theo nội dung của bài đọc mới này.` : ''}
+${generatedPassage ? `- BÀI ĐỌC MỚI ĐÃ TẠO (bắt buộc phải dùng bài đọc mới này để đặt câu hỏi tiếp theo): "${generatedPassage}"` : ''}
 
 Định dạng câu hỏi theo loại "${section.questionType}":
 1. Nếu loại là "multiple_choice" (Trắc nghiệm 4 lựa chọn):
-   - Trả về 4 đáp án A, B, C, D. Chỉ rõ đáp án đúng (ví dụ: "A").
+   - Trả về 4 đáp án A, B, C, D trong mảng options.
 2. Nếu loại là "true_false" (Trắc nghiệm Đúng/Sai):
    - Thường gồm 1 câu hỏi dẫn/tình huống chính, kèm theo 4 mệnh đề con a, b, c, d.
    - Điền 4 mệnh đề con vào trường "options" dưới dạng: [{"id":"A","content":"a) Nội dung mệnh đề a"},{"id":"B","content":"b) Nội dung mệnh đề b"},{"id":"C","content":"c) Nội dung mệnh đề c"},{"id":"D","content":"d) Nội dung mệnh đề d"}].
-   - Trường "correctAnswer" phải ghi rõ kết quả của từng ý theo định dạng: "a: Đúng, b: Sai, c: Đúng, d: Sai".
 3. Nếu loại là "short_answer" (Trắc nghiệm trả lời ngắn/điền số):
    - KHÔNG có trường "options".
-   - Trường "correctAnswer" là đáp số/kết quả ngắn gọn (ví dụ: "5" hoặc "3.5" hoặc "-12").
 4. Nếu loại là "essay" (Tự luận):
    - KHÔNG có trường "options".
-   - Trường "correctAnswer" là hướng dẫn chấm/đáp án tóm tắt.
 
 Trả về CHỈ JSON theo cấu trúc sau (không chứa markdown ngoài khối code json):
 {
@@ -278,9 +262,7 @@ Trả về CHỈ JSON theo cấu trúc sau (không chứa markdown ngoài khối
       "topic": "Tên chuyên đề",
       "difficulty": "Mức độ khó",
       "content": "Nội dung câu hỏi mới (sử dụng Markdown/LaTeX nếu cần)",
-      "options": [{"id": "A", "content": "..."}, {"id": "B", "content": "..."}],
-      "correctAnswer": "Đáp án đúng theo mô tả ở trên",
-      "explanation": "Lời giải thích chi tiết vì sao đáp án đó đúng"
+      "options": [{"id": "A", "content": "..."}, {"id": "B", "content": "..."}]
     }
   ]
 }
@@ -354,9 +336,9 @@ ${JSON.stringify(slice, null, 2)}
                   const prompt = `Bạn là giáo viên xuất sắc. Hãy tạo ra ĐÚNG ${totalInBatch} câu hỏi trắc nghiệm MỚI cho môn ${matrix.subject}.
 Yêu cầu:
 - Mỗi câu đúng chủ đề, số lượng trong bảng bên dưới.
-- 4 đáp án A/B/C/D, chỉ rõ đáp án đúng, giải thích ngắn gọn.
+- 4 đáp án A/B/C/D.
 - Trả về CHỈ JSON hợp lệ:
-{"questions":[{"originalId":"1","type":"multiple_choice","topic":"...","difficulty":"Nhận biết","content":"...","options":[{"id":"A","content":"..."},{"id":"B","content":"..."},{"id":"C","content":"..."},{"id":"D","content":"..."}],"correctAnswer":"A","explanation":"..."}]}
+{"questions":[{"originalId":"1","type":"multiple_choice","topic":"...","difficulty":"Nhận biết","content":"...","options":[{"id":"A","content":"..."},{"id":"B","content":"..."},{"id":"C","content":"..."},{"id":"D","content":"..."}]}]}
 
 CHỦ ĐỀ CẦN TẠO:
 ${JSON.stringify(batches[i])}`;
@@ -377,11 +359,23 @@ ${JSON.stringify(batches[i])}`;
               throw new Error('AI không tạo được câu hỏi nào. Vui lòng thử lại.');
           }
 
+          // Cập nhật lại bài đọc mới được tạo vào các section trong matrix để hiển thị lên Workspace
+          const updatedSections = sections.map(sec => {
+              const matchingQ = allQuestions.find(q => q.sectionId === sec.id && q.passage);
+              return {
+                  ...sec,
+                  passage: matchingQ ? matchingQ.passage : sec.passage
+              };
+          });
+
           const newExam: Exam = {
               id: uuidv4(),
               title: `Đề thi song song: ${matrix.subject} - ${new Date().toLocaleDateString('vi-VN')}`,
               createdAt: Date.now(),
-              matrix: matrix,
+              matrix: {
+                  ...matrix,
+                  sections: updatedSections
+              },
               questions: allQuestions.map((q: any) => ({...q, id: uuidv4()}))
           };
           setCurrentExam(newExam);
@@ -394,6 +388,99 @@ ${JSON.stringify(batches[i])}`;
           setIsGenerating(false);
       }
   }
+
+  const handleGenerateAnswers = async () => {
+      if (!currentExam) return;
+      setIsGeneratingAnswers(true);
+
+      Swal.fire({
+          title: 'Đang giải đề & tạo đáp án...',
+          html: '<p style="font-size:13px;color:#64748b">AI đang phân tích câu hỏi và viết lời giải chi tiết</p>',
+          allowOutsideClick: false,
+          didOpen: () => Swal.showLoading()
+      });
+
+      try {
+          const questionsToSolve = currentExam.questions.map(q => ({
+              id: q.id,
+              originalId: q.originalId,
+              type: q.type,
+              content: q.content,
+              options: q.options,
+              passage: q.passage
+          }));
+
+          const prompt = `Bạn là một giáo viên xuất sắc. Nhiệm vụ của bạn là giải các câu hỏi trong đề thi dưới đây, chỉ ra đáp án đúng và viết lời giải thích ngắn gọn, rõ ràng cho từng câu.
+
+ĐỀ THI CẦN GIẢI:
+${JSON.stringify(questionsToSolve, null, 2)}
+
+Yêu cầu:
+1. Đối với câu hỏi trắc nghiệm (multiple_choice): correctAnswer là chữ cái đáp án đúng (Ví dụ: "A").
+2. Đối với câu hỏi Đúng/Sai (true_false): correctAnswer có định dạng "a: Đúng, b: Sai, c: Đúng, d: Sai" (hoặc True/False).
+3. Đối với trả lời ngắn (short_answer): correctAnswer là đáp số/chữ cụ thể ngắn gọn.
+4. Đối với tự luận (essay): correctAnswer là đáp án tóm tắt hoặc hướng dẫn chấm.
+5. Trường explanation là lời giải thích chi tiết vì sao đáp án đó đúng.
+
+Trả về CHỈ JSON theo định dạng dưới đây, không kèm theo bất kỳ văn bản giải thích nào ngoài khối JSON:
+{
+  "solutions": [
+    {
+      "id": "ID câu hỏi (giữ nguyên id truyền vào từ đề thi)",
+      "correctAnswer": "Đáp án đúng tương ứng",
+      "explanation": "Lời giải thích chi tiết, rõ ràng"
+    }
+  ]
+}
+`;
+
+          const resp = await callGemini({ prompt, model: getStoredModel() }, getStoredApiKey());
+          
+          if (resp && Array.isArray(resp.solutions)) {
+              const solutionsMap = new Map<string, { correctAnswer: string, explanation: string }>();
+              for (const sol of resp.solutions) {
+                  solutionsMap.set(sol.id, {
+                      correctAnswer: sol.correctAnswer,
+                      explanation: sol.explanation
+                  });
+              }
+
+              const updatedQuestions = currentExam.questions.map(q => {
+                  const sol = solutionsMap.get(q.id);
+                  if (sol) {
+                      return {
+                          ...q,
+                          correctAnswer: sol.correctAnswer,
+                          explanation: sol.explanation
+                      };
+                  }
+                  return q;
+              });
+
+              const updatedExam = {
+                  ...currentExam,
+                  questions: updatedQuestions
+              };
+              setCurrentExam(updatedExam);
+              storeExam(updatedExam);
+              refreshHistory();
+              Swal.fire({
+                  icon: 'success',
+                  title: 'Tạo đáp án thành công!',
+                  toast: true,
+                  position: 'top-end',
+                  timer: 3000,
+                  showConfirmButton: false
+              });
+          } else {
+              throw new Error("Dữ liệu phản hồi từ AI không đúng định dạng solutions.");
+          }
+      } catch (e: any) {
+          Swal.fire('Lỗi tạo đáp án', e.message, 'error');
+      } finally {
+          setIsGeneratingAnswers(false);
+      }
+  };
 
   const handleRegenerateQuestion = async (qId: string) => {
        if (!currentExam) return;
@@ -507,6 +594,8 @@ ${oldQ.content}
                      onSave={handleSave}
                      onShuffleAnswers={handleShuffleAnswers}
                      onEditQuestion={handleEditQuestion}
+                     onGenerateAnswers={handleGenerateAnswers}
+                     isGeneratingAnswers={isGeneratingAnswers}
                  />
              )}
           </div>

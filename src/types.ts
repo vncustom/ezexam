@@ -12,7 +12,7 @@ export interface Question {
   passage?: string; // Văn bản đọc hiểu hoặc ngữ liệu đi kèm (nếu có)
   options?: QuestionOption[];
   correctAnswer?: string; // Ví dụ: "A" hoặc "a: Đúng, b: Sai, c: Đúng, d: Sai" hoặc số/chữ cụ thể
-  explanation: string;
+  explanation?: string;
   topic: string;
   difficulty: 'Nhận biết' | 'Thông hiểu' | 'Vận dụng' | 'Vận dụng cao';
 }
