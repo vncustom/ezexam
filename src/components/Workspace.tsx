@@ -92,27 +92,19 @@ export function Workspace({
             didOpen: () => Swal.showLoading()
         });
 
-        // Tạm thời vô hiệu hóa tất cả stylesheet trên trang để tránh html2canvas quét phải thuộc tính 'oklch'
-        const disabledSheets: HTMLStyleElement[] = [];
-        const links = document.querySelectorAll('style, link[rel="stylesheet"]');
-        links.forEach(sheet => {
-            const htmlSheet = sheet as HTMLStyleElement | HTMLLinkElement;
-            if (!htmlSheet.disabled) {
-                try {
-                    htmlSheet.disabled = true;
-                    disabledSheets.push(htmlSheet as any);
-                } catch (e) {
-                    console.warn('Cannot disable stylesheet:', e);
-                }
-            }
-        });
-
         try {
             // Tạo DOM chứa đề thi sạch hoàn toàn (Không sử dụng CSS Tailwind, không có oklch)
             const printContainer = document.createElement('div');
-            printContainer.style.position = 'absolute';
-            printContainer.style.left = '-9999px';
-            printContainer.style.top = '-9999px';
+            printContainer.id = 'pdf-print-container';
+            
+            // Định vị trong viewport nhưng nằm dưới cùng để html2canvas không vẽ khoảng trắng ngoài viewport
+            printContainer.style.position = 'fixed';
+            printContainer.style.left = '0';
+            printContainer.style.top = '0';
+            printContainer.style.zIndex = '-9999';
+            printContainer.style.opacity = '1';
+            printContainer.style.pointerEvents = 'none';
+            
             printContainer.style.width = '790px'; // Chiều rộng trang A4
             printContainer.style.background = '#ffffff';
             printContainer.style.color = '#000000';
@@ -242,7 +234,22 @@ export function Workspace({
                     useCORS: true, 
                     logging: false,
                     scrollX: 0,
-                    scrollY: 0
+                    scrollY: 0,
+                    onclone: (clonedDoc: Document) => {
+                        // Vô hiệu hóa tất cả style và link stylesheet để tránh lỗi oklch
+                        const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+                        styles.forEach(s => s.remove());
+                        
+                        // Định vị lại container in trên tài liệu clone
+                        const clonedContainer = clonedDoc.getElementById('pdf-print-container');
+                        if (clonedContainer) {
+                            clonedContainer.style.position = 'relative';
+                            clonedContainer.style.left = '0';
+                            clonedContainer.style.top = '0';
+                            clonedContainer.style.zIndex = '1';
+                            clonedContainer.style.opacity = '1';
+                        }
+                    }
                 },
                 jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
             };
@@ -255,13 +262,6 @@ export function Workspace({
         } catch (error: any) {
             console.error('PDF Export Error:', error);
             Swal.fire('Lỗi xuất PDF', error.message || 'Không thể tạo file PDF.', 'error');
-        } finally {
-            // Khôi phục lại các stylesheet trên trang chính
-            disabledSheets.forEach(sheet => {
-                try {
-                    sheet.disabled = false;
-                } catch (e) {}
-            });
         }
     };
 
