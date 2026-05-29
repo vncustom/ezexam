@@ -84,14 +84,95 @@ export function Workspace({
 
     const handleExportPDF = async () => {
         if (!examRef.current || !exam) return;
-        const opt = {
-            margin: 10,
-            filename: `${exam.title.replace(/\s+/g, '_')}_DeThi.pdf`,
-            image: { type: 'jpeg' as const, quality: 0.98 },
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const }
-        };
-        await html2pdf().set(opt).from(examRef.current).save();
+        
+        Swal.fire({
+            title: 'Đang khởi tạo PDF...',
+            html: '<p style="font-size:13px;color:#64748b">Hệ thống đang chuyển đổi định dạng và tạo bản in A4...</p>',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            // Tạo DOM clone tạm thời đặt ẩn ngoài màn hình để tránh scroll và lỗi layout
+            const printContainer = document.createElement('div');
+            printContainer.style.position = 'absolute';
+            printContainer.style.left = '-9999px';
+            printContainer.style.top = '-9999px';
+            printContainer.style.width = '790px'; // Chiều rộng chuẩn A4
+            printContainer.style.background = 'white';
+            printContainer.style.color = 'black';
+            printContainer.style.padding = '40px';
+            printContainer.style.fontFamily = 'Times New Roman, serif';
+
+            // Tạo tiêu đề đề thi chuẩn học đường Việt Nam
+            const schoolHeader = document.createElement('div');
+            schoolHeader.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; line-height: 1.5;">
+                    <tr>
+                        <td style="width: 55%; text-align: center; vertical-align: top;">
+                            SỞ GD&ĐT ________________<br/>
+                            <strong>TRƯỜNG THPT ________________</strong>
+                        </td>
+                        <td style="width: 45%; text-align: center; vertical-align: top;">
+                            <strong>ĐỀ KIỂM TRA ĐỊNH KÌ</strong><br/>
+                            Môn: <strong>${exam.matrix.subject.toUpperCase()}</strong><br/>
+                            <em>Thời gian làm bài: ${exam.matrix.durationMinutes} phút</em>
+                        </td>
+                    </tr>
+                </table>
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="font-size: 16px; margin: 0; text-transform: uppercase; font-weight: bold;">ĐỀ THI SONG SONG</h2>
+                    <span style="font-size: 13px; font-style: italic;">(${exam.title})</span>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 13px;">
+                    <tr>
+                        <td style="border: none; padding: 4px 0; width: 65%;">Họ và tên học sinh: ........................................................................</td>
+                        <td style="border: none; padding: 4px 0; width: 35%;">Số báo danh: .......................................</td>
+                    </tr>
+                </table>
+                <hr style="border: none; border-top: 1px dashed #666; margin-bottom: 25px;" />
+            `;
+            printContainer.appendChild(schoolHeader);
+
+            // Clone nội dung câu hỏi
+            const questionsClone = examRef.current.cloneNode(true) as HTMLElement;
+            
+            // Xóa bỏ các kiểu scroll/chiều cao giới hạn ở clone để bung toàn bộ chiều cao tự nhiên
+            questionsClone.style.height = 'auto';
+            questionsClone.style.overflow = 'visible';
+            questionsClone.style.padding = '0';
+            questionsClone.style.margin = '0';
+            
+            // Ẩn tất cả các nút đổi câu, sửa câu khi xuất PDF
+            const actionButtons = questionsClone.querySelectorAll('.group-hover\\:opacity-100, .absolute');
+            actionButtons.forEach(btn => (btn as HTMLElement).style.setProperty('display', 'none', 'important'));
+
+            printContainer.appendChild(questionsClone);
+            document.body.appendChild(printContainer);
+
+            const opt = {
+                margin: 15,
+                filename: `${exam.title.replace(/\s+/g, '_')}_DeThi.pdf`,
+                image: { type: 'jpeg' as const, quality: 0.98 },
+                html2canvas: { 
+                    scale: 2, 
+                    useCORS: true, 
+                    logging: false,
+                    scrollX: 0,
+                    scrollY: 0
+                },
+                jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+            };
+
+            await html2pdf().set(opt).from(printContainer).save();
+            
+            // Dọn dẹp DOM
+            document.body.removeChild(printContainer);
+            Swal.close();
+        } catch (error: any) {
+            console.error('PDF Export Error:', error);
+            Swal.fire('Lỗi xuất PDF', error.message || 'Không thể tạo file PDF.', 'error');
+        }
     };
 
     const handleExportDocx = async () => {

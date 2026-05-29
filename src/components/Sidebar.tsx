@@ -1,6 +1,17 @@
 import { Exam } from "../types";
+import { Trash2 } from "lucide-react";
 
-export function Sidebar({ exams, onSelect, currentId }: { exams: Exam[], onSelect: (id: string) => void, currentId: string | null }) {
+export function Sidebar({ 
+    exams, 
+    onSelect, 
+    currentId,
+    onDelete
+}: { 
+    exams: Exam[], 
+    onSelect: (id: string) => void, 
+    currentId: string | null,
+    onDelete?: (id: string) => void
+}) {
     return (
         <aside className="w-60 bg-white border-r border-slate-200 flex flex-col p-5 shrink-0 h-full overflow-y-auto hidden lg:flex">
             <h3 className="text-[12px] uppercase tracking-[1px] text-slate-500 mb-4 font-semibold">
@@ -10,14 +21,30 @@ export function Sidebar({ exams, onSelect, currentId }: { exams: Exam[], onSelec
                 {exams.map(e => {
                     const isActive = currentId === e.id;
                     return (
-                        <button 
-                            key={e.id} 
-                            onClick={() => onSelect(e.id)}
-                            className={`text-left p-3 rounded-lg transition-all ${isActive ? 'bg-indigo-50/50 border-l-[4px] border-indigo-600' : 'hover:bg-slate-50 border-l-[4px] border-transparent'}`}
+                        <div 
+                            key={e.id}
+                            className={`group relative flex items-center justify-between rounded-lg transition-all ${isActive ? 'bg-indigo-50/50 border-l-[4px] border-indigo-600' : 'hover:bg-slate-50 border-l-[4px] border-transparent'}`}
                         >
-                            <div className="font-semibold text-sm truncate text-slate-900">{e.title}</div>
-                            <div className="text-[11px] text-slate-500 mt-1">{new Date(e.createdAt).toLocaleDateString('vi-VN')} • {e.questions.length} câu</div>
-                        </button>
+                            <button 
+                                onClick={() => onSelect(e.id)}
+                                className="text-left p-3 pr-8 flex-1 border-none bg-transparent cursor-pointer"
+                            >
+                                <div className="font-semibold text-sm truncate text-slate-900 pr-2">{e.title}</div>
+                                <div className="text-[11px] text-slate-500 mt-1">{new Date(e.createdAt).toLocaleDateString('vi-VN')} • {e.questions.length} câu</div>
+                            </button>
+                            {onDelete && (
+                                <button
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onDelete(e.id);
+                                    }}
+                                    className="absolute right-2 p-1.5 text-slate-400 hover:text-rose-600 rounded bg-transparent border-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Xóa đề thi"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </div>
                     );
                 })}
                 {exams.length === 0 && (

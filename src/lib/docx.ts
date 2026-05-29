@@ -18,7 +18,8 @@ const BORDER_THIN = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' };
 const CELL_BORDERS = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
 
 /** Strip basic markdown for clean Word text */
-function stripMarkdown(text: string): string {
+function stripMarkdown(text: string | undefined | null): string {
+    if (!text) return '';
     return text
         .replace(/\*\*(.*?)\*\*/g, '$1')  // bold
         .replace(/\*(.*?)\*/g, '$1')       // italic

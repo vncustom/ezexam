@@ -48,6 +48,37 @@ export default function App() {
       }
   }
 
+  const handleDeleteHistory = (id: string) => {
+      Swal.fire({
+          title: 'Xóa đề thi?',
+          text: 'Bạn có chắc chắn muốn xóa đề thi này khỏi lịch sử?',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#ef4444',
+          cancelButtonColor: '#64748b',
+          confirmButtonText: 'Xóa',
+          cancelButtonText: 'Hủy'
+      }).then((result) => {
+          if (result.isConfirmed) {
+              deleteStoredExam(id);
+              refreshHistory();
+              if (currentExam?.id === id) {
+                  setCurrentExam(null);
+                  setMatrix(null);
+                  setStep(0);
+              }
+              Swal.fire({
+                  icon: 'success',
+                  title: 'Đã xóa đề thi!',
+                  toast: true,
+                  position: 'top-end',
+                  timer: 2000,
+                  showConfirmButton: false
+              });
+          }
+      });
+  }
+
   const handleTextExtracted = async (text: string) => {
       setPdfText(text);
       setStep(1); // Moving to Matrix state, but we need to analyze first
@@ -576,6 +607,7 @@ ${oldQ.content}
                  exams={history} 
                  onSelect={handleSelectHistory} 
                  currentId={currentExam?.id || null} 
+                 onDelete={handleDeleteHistory}
               />
           )}
           
